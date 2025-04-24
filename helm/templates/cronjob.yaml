@@ -1,0 +1,32 @@
+{{- if .Values.schedule.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "tesla-sync.fullname" . }}-scheduled
+  labels:
+    {{- include "tesla-sync.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.schedule.cron | quote }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: {{ .Chart.Name }}
+            image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+            envFrom:
+              - configMapRef:
+                  name: {{ include "tesla-sync.fullname" . }}-config
+              - secretRef:
+                  name: {{ include "tesla-sync.fullname" . }}-db-secrets
+            env:
+              - name: SYNC_POSITIONS
+                value: {{ .Values.sync.positions | quote }}
+              - name: SYNC_DRIVES
+                value: {{ .Values.sync.drives | quote }}
+              - name: SYNC_CHARGING
+                value: {{ .Values.sync.charging | quote }}
+              - name: SYNC_STATES
+                value: {{ .Values.sync.states | quote }}
+{{- end }}

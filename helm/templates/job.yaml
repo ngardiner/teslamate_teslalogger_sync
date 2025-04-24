@@ -1,23 +1,23 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: batch/v1
+kind: Job
 metadata:
   name: {{ include "tesla-sync.fullname" . }}
   labels:
     {{- include "tesla-sync.labels" . | nindent 4 }}
+  annotations:
+    # Optional: Ensure job can be rerun
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": hook-succeeded
 spec:
-  replicas: {{ .Values.replicaCount }}
-  selector:
-    matchLabels:
-      {{- include "tesla-sync.selectorLabels" . | nindent 6 }}
+  backoffLimit: 3  # Number of retries before marking job as failed
+  activeDeadlineSeconds: 3600  # Maximum time the job can run
   template:
     metadata:
       labels:
         {{- include "tesla-sync.selectorLabels" . | nindent 8 }}
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      restartPolicy: OnFailure
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -27,27 +27,22 @@ spec:
                 name: {{ include "tesla-sync.fullname" . }}-config
             - secretRef:
                 name: {{ include "tesla-sync.fullname" . }}-db-secrets
+          
+          # Optional: Resource constraints
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if .Values.persistence.enabled }}
-          volumeMounts:
-            - name: logs
-              mountPath: /app/logs
-          {{- end }}
-      {{- if .Values.persistence.enabled }}
-      volumes:
-        - name: logs
-          persistentVolumeClaim:
-            claimName: {{ include "tesla-sync.fullname" . }}-logs
-      {{- end }}
+
+      # Optional: Node selection
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}

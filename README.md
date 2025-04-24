@@ -105,6 +105,23 @@ Logs are output to:
      - Avoid committing `.env` files to version control. Use secrets management tools like AWS Secrets Manager, HashiCorp Vault, or Docker secrets for production environments.
      - Regularly update dependencies to patch known vulnerabilities.
 
+### Helm Chart
+
+#### One-time sync
+helm install tesla-sync ./helm-chart \
+  --set secrets.teslaloggerDbPassword=your_teslalogger_password \
+  --set secrets.teslamateDbPassword=your_teslamate_password
+
+#### Scheduled sync
+helm install tesla-sync ./helm-chart \
+  --set schedule.enabled=true \
+  --set schedule.cron="0 2 * * *" \
+  --set sync.positions=true \
+  --set sync.drives=true \
+  --set secrets.teslaloggerDbPassword=your_teslalogger_password \
+  --set secrets.teslamateDbPassword=your_teslamate_password
+
+
 ### Troubleshooting
    * Check tesla_sync.log for detailed sync information
    * Verify database connection parameters

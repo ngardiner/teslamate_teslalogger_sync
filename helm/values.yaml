@@ -1,7 +1,5 @@
 # Default values for tesla-sync
 
-replicaCount: 1
-
 image:
   repository: ngardinerau/tesla-sync
   pullPolicy: IfNotPresent
@@ -61,3 +59,16 @@ persistence:
   accessMode: ReadWriteOnce
   size: 1Gi
   storageClass: ""
+
+# Example for scheduling sync job
+#schedule: 
+#  enabled: false
+#  # Cron expression for periodic runs
+#  cron: "0 2 * * *"  # Example: Run daily at 2 AM
+
+# Specific sync configuration
+sync:
+  positions: false
+  drives: false
+  charging: false
+  states: false
