@@ -14,6 +14,15 @@ class PositionSync:
         teslalogger_positions = self._fetch_teslalogger_positions()
         teslamate_positions = self._fetch_teslamate_positions()
 
+        # Validate fetched positions
+        if teslalogger_positions is None:
+            self.logger.error("Failed to fetch TeslaLogger positions")
+            return []
+        
+        if teslamate_positions is None:
+            self.logger.error("Failed to fetch TeslaMate positions")
+            return []
+
         # Find potential matches
         potential_merges = self._find_position_matches(
             teslalogger_positions, 
@@ -21,6 +30,58 @@ class PositionSync:
         )
 
         return potential_merges
+
+    def _fetch_teslalogger_positions(self):
+        """
+        Fetch positions from TeslaLogger database
+        """
+        try:
+            # Example query - adjust based on your actual database schema
+            query = "SELECT * FROM pos LIMIT 1000"  # Adjust limit as needed
+            result = self.teslalogger_conn.execute(query)
+            
+            # Convert to list of dictionaries
+            positions = [
+                {
+                    'Datum': row.Datum,
+                    'lat': row.lat,
+                    'lng': row.lng,
+                    # Add other relevant fields
+                } for row in result
+            ]
+            
+            self.logger.info(f"Fetched {len(positions)} positions from TeslaLogger")
+            return positions
+        
+        except Exception as e:
+            self.logger.error(f"Error fetching TeslaLogger positions: {e}")
+            return None
+
+    def _fetch_teslamate_positions(self):
+        """
+        Fetch positions from TeslaMate database
+        """
+        try:
+            # Example query - adjust based on your actual database schema
+            query = "SELECT * FROM positions LIMIT 1000"  # Adjust limit as needed
+            result = self.teslamate_conn.execute(query)
+            
+            # Convert to list of dictionaries
+            positions = [
+                {
+                    'date': row.date,
+                    'latitude': row.latitude,
+                    'longitude': row.longitude,
+                    # Add other relevant fields
+                } for row in result
+            ]
+            
+            self.logger.info(f"Fetched {len(positions)} positions from TeslaMate")
+            return positions
+        
+        except Exception as e:
+            self.logger.error(f"Error fetching TeslaMate positions: {e}")
+            return None
 
     def _find_position_matches(self, teslalogger_pos, teslamate_pos):
         matches = []
@@ -60,13 +121,3 @@ class PositionSync:
             Potential position merges detected.
             To apply changes, set DRYRUN=0
             """)
-
-    def _fetch_teslalogger_positions(self):
-        # Fetch positions from TeslaLogger database
-        # Implement database query
-        pass
-
-    def _fetch_teslamate_positions(self):
-        # Fetch positions from TeslaMate database
-        # Implement database query
-        pass

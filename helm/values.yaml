@@ -3,7 +3,7 @@
 replicaCount: 1
 
 image:
-  repository: ngardinerau/tesla_sync
+  repository: ngardinerau/tesla-sync
   pullPolicy: IfNotPresent
   tag: latest
 
