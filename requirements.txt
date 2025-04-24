@@ -1,4 +1,5 @@
-sqlalchemy
-psycopg2-binary
-pymysql
-python-dotenv
+sqlalchemy>=2.0.40
+psycopg2-binary>=2.9.10
+pymysql>=1.1.1
+python-dotenv>=1.0.0
+setuptools>=70.0.0
