@@ -4,6 +4,17 @@
 
 This tool provides a robust synchronization mechanism between TeslaLogger and TeslaMate databases, allowing seamless data reconciliation and merge capabilities.
 
+## Table of Contents
+- [Overview](#overview)
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Configuration](#configuration)
+- [Running with Docker](#running-with-docker)
+- [Sync Modes](#sync-modes)
+- [Logging](#logging)
+- [Security Considerations](#security-considerations)
+- [Troubleshooting](#troubleshooting)
+
 ### Features
 
 - Bidirectional sync for:
@@ -31,11 +42,11 @@ Create a `.env` file with the following configuration:
 
 ```bash
 # TeslaLogger Database Configuration
-TESLALOGGER_DB_HOST=localhost
-TESLALOGGER_DB_PORT=3306
-TESLALOGGER_DB_NAME=teslalogger
-TESLALOGGER_DB_USER=root
-TESLALOGGER_DB_PASSWORD=
+TESLALOGGER_DB_HOST=localhost  # Hostname or IP of the TeslaLogger database
+TESLALOGGER_DB_PORT=3306       # Port number for the TeslaLogger database
+TESLALOGGER_DB_NAME=teslalogger  # Name of the TeslaLogger database
+TESLALOGGER_DB_USER=root       # Username for the TeslaLogger database
+TESLALOGGER_DB_PASSWORD=       # Password for the TeslaLogger database
 
 # TeslaMate Database Configuration
 TESLAMATE_DB_HOST=localhost
@@ -78,16 +89,22 @@ DRYRUN=1: Logs potential merges without modifying data
 DRYRUN=0: Applies actual database merges
 Individual sync toggles allow granular control
 
-Logging
+### Logging
 Logs are output to:
 
-Console
-tesla_sync.log file
-Security Considerations
-Runs as non-root user
-Minimal system dependencies
-Environment variable based configuration
-Troubleshooting
-Check tesla_sync.log for detailed sync information
-Verify database connection parameters
-Ensure sufficient permissions for database access
+   * Console
+   * tesla_sync.log file
+
+### Security Considerations
+   * Runs as a non-root user to minimize potential damage from exploits.
+   * Minimal system dependencies reduce the attack surface.
+   * Environment variable-based configuration ensures sensitive data is not hardcoded.
+   * **Recommendations**:
+     - Use a `.dockerignore` file to exclude sensitive files (e.g., `.env`, `.git`).
+     - Avoid committing `.env` files to version control. Use secrets management tools like AWS Secrets Manager, HashiCorp Vault, or Docker secrets for production environments.
+     - Regularly update dependencies to patch known vulnerabilities.
+
+### Troubleshooting
+   * Check tesla_sync.log for detailed sync information
+   * Verify database connection parameters
+   * Ensure sufficient permissions for database access
