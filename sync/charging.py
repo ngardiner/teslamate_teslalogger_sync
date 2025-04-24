@@ -14,6 +14,21 @@ class ChargingSync:
         teslalogger_charging = self._fetch_teslalogger_charging()
         teslamate_charging = self._fetch_teslamate_charging()
 
+        # Validate fetched charging records
+        if teslalogger_charging is None:
+            self.logger.error("Failed to fetch TeslaLogger charging records")
+            # Return empty list instead of None
+            return []
+        
+        if teslamate_charging is None:
+            self.logger.error("Failed to fetch TeslaMate charging records")
+            # Return empty list instead of None
+            return []
+
+        # Detailed logging
+        self.logger.info(f"TeslaLogger Charging Records: {len(teslalogger_charging)}")
+        self.logger.info(f"TeslaMate Charging Records: {len(teslamate_charging)}")
+
         # Find potential matches
         potential_merges = self._find_charging_matches(
             teslalogger_charging, 

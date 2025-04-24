@@ -11,6 +11,12 @@ def establish_teslamate_connection(config):
         )
         
         engine = create_engine(connection_string, pool_pre_ping=True)
+
+        # Test connection
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT 1"))
+            print("TeslaMate Database Connection Successful")
+
         Session = sessionmaker(bind=engine)
         
         return Session()

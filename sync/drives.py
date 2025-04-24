@@ -1,6 +1,7 @@
 import logging
 from utils.helpers import haversine_distance
 from sqlalchemy import text
+from datetime import timedelta
 
 class DriveSync:
     def __init__(self, teslalogger_conn, teslamate_conn, dry_run):
@@ -17,11 +18,17 @@ class DriveSync:
         # Validate fetched drives
         if teslalogger_drives is None:
             self.logger.error("Failed to fetch TeslaLogger drives")
+            # Return empty list instead of None
             return []
         
         if teslamate_drives is None:
             self.logger.error("Failed to fetch TeslaMate drives")
+            # Return empty list instead of None
             return []
+
+        # Detailed logging
+        self.logger.info(f"TeslaLogger Drives: {len(teslalogger_drives)}")
+        self.logger.info(f"TeslaMate Drives: {len(teslamate_drives)}")
 
         # Find potential matches
         potential_merges = self._find_drive_matches(
@@ -48,9 +55,12 @@ class DriveSync:
                         'StartDate': row.StartDate,
                         'EndDate': row.EndDate,
                         'CarID': row.CarID,
-                        'distance': row.distance if hasattr(row, 'distance') else None,
-                        'speed_max': row.speed_max,
-                        # Add other relevant fields
+                        'distance': getattr(row, 'distance', None),
+                        'speed_max': getattr(row, 'speed_max', None),
+                        'start_latitude': getattr(row, 'start_latitude', None),
+                        'start_longitude': getattr(row, 'start_longitude', None),
+                        'end_latitude': getattr(row, 'end_latitude', None),
+                        'end_longitude': getattr(row, 'end_longitude', None),
                     }
                     drives.append(drive)
                 except Exception as field_error:
@@ -80,9 +90,13 @@ class DriveSync:
                         'start_date': row.start_date,
                         'end_date': row.end_date,
                         'car_id': row.car_id,
-                        'distance': row.end_km - row.start_km if hasattr(row, 'end_km') and hasattr(row, 'start_km') else None,
-                        'speed_max': row.speed_max,
-                        # Add other relevant fields
+                        'distance': getattr(row, 'distance', None) or 
+                                    (getattr(row, 'end_km', 0) - getattr(row, 'start_km', 0)),
+                        'speed_max': getattr(row, 'speed_max', None),
+                        'start_latitude': getattr(row, 'start_latitude', None),
+                        'start_longitude': getattr(row, 'start_longitude', None),
+                        'end_latitude': getattr(row, 'end_latitude', None),
+                        'end_longitude': getattr(row, 'end_longitude', None),
                     }
                     drives.append(drive)
                 except Exception as field_error:
@@ -101,8 +115,21 @@ class DriveSync:
         for tl_drive in teslalogger_drives:
             for tm_drive in teslamate_drives:
                 # Match criteria
-                if (abs((tl_drive['StartDate'] - tm_drive['start_date']).total_seconds()) <= 300 and
-                    tl_drive['CarID'] == tm_drive['car_id']):
+                # Compare start times with a 5-minute tolerance
+                time_diff = abs(tl_drive['StartDate'] - tm_drive['start_date'])
+                
+                # Check if drives are from the same car
+                car_match = (tl_drive['CarID'] == tm_drive['car_id'])
+                
+                # Optional: Add distance proximity check
+                distance_match = True
+                if tl_drive['distance'] is not None and tm_drive['distance'] is not None:
+                    distance_match = abs(tl_drive['distance'] - tm_drive['distance']) < 1  # 1 km tolerance
+                
+                # Combine match criteria
+                if (time_diff <= timedelta(minutes=5) and 
+                    car_match and 
+                    distance_match):
                     
                     merged_drive = self._merge_drive_record(tl_drive, tm_drive)
                     matches.append(merged_drive)
@@ -112,21 +139,31 @@ class DriveSync:
     def _merge_drive_record(self, teslalogger_drive, teslamate_drive):
         # Merge logic for drive records
         merged_drive = {
-            'start_date': min(teslalogger_drive['StartDate'], teslamate_drive['start_date']),
+            'start_date': min(
+                teslalogger_drive['StartDate'], 
+                teslamate_drive['start_date']
+            ),
             'end_date': max(
                 teslalogger_drive.get('EndDate') or teslamate_drive['end_date'], 
                 teslamate_drive['end_date']
             ),
             'car_id': teslalogger_drive['CarID'],
             'distance': max(
-                teslalogger_drive.get('distance', 0), 
-                teslamate_drive.get('distance', 0)
+                teslalogger_drive.get('distance', 0) or 0, 
+                teslamate_drive.get('distance', 0) or 0
             ),
             'speed_max': max(
-                teslalogger_drive.get('speed_max', 0), 
-                teslamate_drive.get('speed_max', 0)
+                teslalogger_drive.get('speed_max', 0) or 0, 
+                teslamate_drive.get('speed_max', 0) or 0
             ),
-            # Add more merged fields as needed
+            'start_location': {
+                'latitude': teslalogger_drive.get('start_latitude') or teslamate_drive.get('start_latitude'),
+                'longitude': teslalogger_drive.get('start_longitude') or teslamate_drive.get('start_longitude')
+            },
+            'end_location': {
+                'latitude': teslalogger_drive.get('end_latitude') or teslamate_drive.get('end_latitude'),
+                'longitude': teslalogger_drive.get('end_longitude') or teslamate_drive.get('end_longitude')
+            }
         }
         return merged_drive
 

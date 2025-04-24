@@ -1,6 +1,7 @@
 import logging
 from utils.helpers import haversine_distance
 from sqlalchemy import text
+from datetime import timedelta
 
 class PositionSync:
     def __init__(self, teslalogger_conn, teslamate_conn, dry_run, test_position):
@@ -47,11 +48,15 @@ class PositionSync:
                 try:
                     position = {
                         'Datum': row.Datum,
-                        'lat': row.lat,
-                        'lng': row.lng,
-                        'ideal_battery_range_km': row.ideal_battery_range_km,
-                        'odometer': row.odometer,
-                        # Add other relevant fields
+                        'CarID': row.CarID,
+                        'lat': getattr(row, 'lat', None),
+                        'lng': getattr(row, 'lng', None),
+                        'battery_level': getattr(row, 'battery_level', None),
+                        'ideal_battery_range_km': getattr(row, 'ideal_battery_range_km', None),
+                        'odometer': getattr(row, 'odometer', None),
+                        'speed': getattr(row, 'speed', None),
+                        'power': getattr(row, 'power', None),
+                        'heading': getattr(row, 'heading', None),
                     }
                     positions.append(position)
                 except Exception as field_error:
@@ -79,11 +84,14 @@ class PositionSync:
                 try:
                     position = {
                         'date': row.date,
-                        'latitude': row.latitude,
-                        'longitude': row.longitude,
-                        'battery_level': row.battery_level,
-                        'odometer': row.odometer,
-                        # Add other relevant fields
+                        'car_id': row.car_id,
+                        'latitude': getattr(row, 'latitude', None),
+                        'longitude': getattr(row, 'longitude', None),
+                        'battery_level': getattr(row, 'battery_level', None),
+                        'odometer': getattr(row, 'odometer', None),
+                        'speed': getattr(row, 'speed', None),
+                        'power': getattr(row, 'power', None),
+                        'heading': getattr(row, 'heading', None),
                     }
                     positions.append(position)
                 except Exception as field_error:
@@ -102,11 +110,26 @@ class PositionSync:
         for tl_pos in teslalogger_pos:
             for tm_pos in teslamate_pos:
                 # Match criteria
-                if (abs((tl_pos['Datum'] - tm_pos['date']).total_seconds()) <= 30 and
-                    haversine_distance(
+                # Compare timestamps with a 30-second tolerance
+                time_diff = abs(tl_pos['Datum'] - tm_pos['date'])
+                
+                # Check if positions are from the same car
+                car_match = (tl_pos.get('CarID') == tm_pos.get('car_id'))
+                
+                # Calculate distance between positions
+                if (tl_pos['lat'] and tl_pos['lng'] and 
+                    tm_pos['latitude'] and tm_pos['longitude']):
+                    distance = haversine_distance(
                         tl_pos['lat'], tl_pos['lng'],
                         tm_pos['latitude'], tm_pos['longitude']
-                    ) <= 10):  # 10 meters
+                    )
+                else:
+                    distance = float('inf')
+                
+                # Combine match criteria
+                if (time_diff <= timedelta(seconds=30) and 
+                    car_match and 
+                    distance <= 10):  # 10 meters proximity
                     
                     merged_pos = self._merge_position_record(tl_pos, tm_pos)
                     matches.append(merged_pos)
@@ -114,12 +137,29 @@ class PositionSync:
         return matches
 
     def _merge_position_record(self, teslalogger_pos, teslamate_pos):
-        # Merge logic from previous implementation
+        # Merge logic for position records
         merged_pos = {
-            'timestamp': max(teslalogger_pos['Datum'], teslamate_pos['date']),
-            'latitude': teslamate_pos['latitude'],
-            'longitude': teslamate_pos['longitude'],
-            # ... other merged fields
+            'timestamp': min(teslalogger_pos['Datum'], teslamate_pos['date']),
+            'car_id': teslalogger_pos.get('CarID') or teslamate_pos.get('car_id'),
+            'latitude': teslalogger_pos.get('lat') or teslamate_pos.get('latitude'),
+            'longitude': teslalogger_pos.get('lng') or teslamate_pos.get('longitude'),
+            'battery_level': max(
+                teslalogger_pos.get('battery_level', 0) or 0,
+                teslamate_pos.get('battery_level', 0) or 0
+            ),
+            'odometer': max(
+                teslalogger_pos.get('odometer', 0) or 0,
+                teslamate_pos.get('odometer', 0) or 0
+            ),
+            'speed': max(
+                teslalogger_pos.get('speed', 0) or 0,
+                teslamate_pos.get('speed', 0) or 0
+            ),
+            'power': max(
+                teslalogger_pos.get('power', 0) or 0,
+                teslamate_pos.get('power', 0) or 0
+            ),
+            'heading': teslalogger_pos.get('heading') or teslamate_pos.get('heading'),
         }
         return merged_pos
 
