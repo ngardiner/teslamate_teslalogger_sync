@@ -1,3 +1,4 @@
+import logging
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
@@ -9,18 +10,15 @@ def establish_teslalogger_connection(config):
     :return: SQLAlchemy engine
     """
     try:
-        # Construct connection string
-        connection_string = (
-            f"mysql+pymysql://{config.TESLALOGGER_DB_USER}:{config.TESLALOGGER_DB_PASS}@"
-            f"{config.TESLALOGGER_DB_HOST}:{config.TESLALOGGER_DB_PORT}/{config.TESLALOGGER_DB_NAME}"
-        )
+        # Use the method from config to generate connection string
+        connection_string = config.get_database_connection_string(config.teslalogger_config)
         
         engine = create_engine(connection_string, pool_pre_ping=True)
 
         # Test connection
         with engine.connect() as connection:
             result = connection.execute(text("SELECT 1"))
-            print("TeslaLogger Database Connection Successful")
+            logging.info("TeslaLogger Database Connection Successful")
 
         Session = sessionmaker(bind=engine)
         
