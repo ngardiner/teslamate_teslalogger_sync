@@ -1,0 +1,63 @@
+# Default values for tesla-sync
+
+replicaCount: 1
+
+image:
+  repository: ngardinerau/tesla_sync
+  pullPolicy: IfNotPresent
+  tag: latest
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Environment variables for database and sync configuration
+env:
+  # TeslaLogger Database Configuration
+  TESLALOGGER_DB_HOST: localhost
+  TESLALOGGER_DB_PORT: "3306"
+  TESLALOGGER_DB_NAME: teslalogger
+  TESLALOGGER_DB_USER: root
+
+  # TeslaMate Database Configuration
+  TESLAMATE_DB_HOST: localhost
+  TESLAMATE_DB_PORT: "5432"
+  TESLAMATE_DB_NAME: teslamate
+  TESLAMATE_DB_USER: teslamate
+
+  # Sync Configuration
+  DRYRUN: "1"
+  TEST_POSITION: "0"
+  SYNC_POSITIONS: "0"
+  SYNC_DRIVES: "0"
+  SYNC_CHARGING: "0"
+  SYNC_STATES: "0"
+
+  # Logging
+  LOG_LEVEL: INFO
+
+# Secrets for database passwords
+secrets:
+  teslaloggerDbPassword: ""
+  teslamateDbPassword: ""
+
+# Resource configuration
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Node selector, tolerations, and affinity
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Persistent volume for logs (optional)
+persistence:
+  enabled: false
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  storageClass: ""

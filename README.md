@@ -65,6 +65,7 @@ SYNC_STATES=0         # Enable state sync
 
 # Logging
 LOG_LEVEL=INFO
+```
 
 ## Running with Docker
 ### Build the Docker Image

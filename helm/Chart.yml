@@ -1,0 +1,13 @@
+apiVersion: v2
+name: tesla-sync
+description: A Helm chart for TeslaLogger and TeslaMate Sync Tool
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - tesla
+  - sync
+  - database
+home: https://github.com/ngardinerau/tesla_sync
+maintainers:
+  - name: Nathan Gardiner
+    email: ngardiner@gmail.com

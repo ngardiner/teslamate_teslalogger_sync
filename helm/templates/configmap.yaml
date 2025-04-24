@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tesla-sync.fullname" . }}-config
+  labels:
+    {{- include "tesla-sync.labels" . | nindent 4 }}
+data:
+  TESLALOGGER_DB_HOST: {{ .Values.env.TESLALOGGER_DB_HOST | quote }}
+  TESLALOGGER_DB_PORT: {{ .Values.env.TESLALOGGER_DB_PORT | quote }}
+  TESLALOGGER_DB_NAME: {{ .Values.env.TESLALOGGER_DB_NAME | quote }}
+  TESLALOGGER_DB_USER: {{ .Values.env.TESLALOGGER_DB_USER | quote }}
+  
+  TESLAMATE_DB_HOST: {{ .Values.env.TESLAMATE_DB_HOST | quote }}
+  TESLAMATE_DB_PORT: {{ .Values.env.TESLAMATE_DB_PORT | quote }}
+  TESLAMATE_DB_NAME: {{ .Values.env.TESLAMATE_DB_NAME | quote }}
+  TESLAMATE_DB_USER: {{ .Values.env.TESLAMATE_DB_USER | quote }}
+  
+  DRYRUN: {{ .Values.env.DRYRUN | quote }}
+  TEST_POSITION: {{ .Values.env.TEST_POSITION | quote }}
+  SYNC_POSITIONS: {{ .Values.env.SYNC_POSITIONS | quote }}
+  SYNC_DRIVES: {{ .Values.env.SYNC_DRIVES | quote }}
+  SYNC_CHARGING: {{ .Values.env.SYNC_CHARGING | quote }}
+  SYNC_STATES: {{ .Values.env.SYNC_STATES | quote }}
+  
+  LOG_LEVEL: {{ .Values.env.LOG_LEVEL | quote }}
