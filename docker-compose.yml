@@ -1,0 +1,11 @@
+3. Optional `docker-compose.yml` (if you want to include it):
+```yaml
+version: '3.8'
+
+services:
+  tesla-sync:
+    build: .
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+    restart: "no"
