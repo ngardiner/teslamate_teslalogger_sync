@@ -1,13 +1,18 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 def establish_teslamate_connection(config):
     """
     Establish a connection to the TeslaMate database
+
+    :param config: Configuration object
+    :return: SQLAlchemy engine
     """
     try:
-        connection_string = config.get_database_connection_string(
-            config.teslamate_config
+        # Construct connection string
+        connection_string = (
+            f"postgresql://{config.TESLAMATE_DB_USER}:{config.TESLAMATE_DB_PASS}@"
+            f"{config.TESLAMATE_DB_HOST}:{config.TESLAMATE_DB_PORT}/{config.TESLAMATE_DB_NAME}"
         )
         
         engine = create_engine(connection_string, pool_pre_ping=True)

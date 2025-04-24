@@ -1,4 +1,5 @@
 import logging
+from config.config import Config
 from database.teslalogger_connection import establish_teslalogger_connection
 from database.teslamate_connection import establish_teslamate_connection
 from sync.positions import PositionSync
@@ -16,17 +17,20 @@ def main():
     logger = logging.getLogger(__name__)
 
     try:
-        # Database connections
-        teslalogger_conn = establish_teslalogger_connection()
-        teslamate_conn = establish_teslamate_connection()
+        # Create configuration instance
+        config = Config()
 
-        # Sync configuration from environment variables
-        sync_positions = os.getenv('SYNC_POSITIONS', '0') == '1'
-        sync_drives = os.getenv('SYNC_DRIVES', '0') == '1'
-        sync_charging = os.getenv('SYNC_CHARGING', '0') == '1'
-        sync_states = os.getenv('SYNC_STATES', '0') == '1'
-        dry_run = os.getenv('DRYRUN', '1') == '1'
-        test_position = os.getenv('TEST_POSITION', '0') == '1'
+        # Establish database connections
+        teslalogger_conn = establish_teslalogger_connection(config)
+        teslamate_conn = establish_teslamate_connection(config)
+
+        # Sync configuration from config
+        sync_positions = config.SYNC_POSITIONS
+        sync_drives = config.SYNC_DRIVES
+        sync_charging = config.SYNC_CHARGING
+        sync_states = config.SYNC_STATES
+        dry_run = config.DRYRUN
+        test_position = config.TEST_POSITION
 
         # Debug logging
         logger.info(f"Sync Configuration:")
