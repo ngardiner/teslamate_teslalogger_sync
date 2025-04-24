@@ -60,11 +60,11 @@ persistence:
   size: 1Gi
   storageClass: ""
 
-# Example for scheduling sync job
-#schedule: 
-#  enabled: false
-#  # Cron expression for periodic runs
-#  cron: "0 2 * * *"  # Example: Run daily at 2 AM
+# Example for scheduling sync job. Set to true to enable.
+schedule: 
+  enabled: false
+  # Cron expression for periodic runs
+  cron: "0 2 * * *"  # Example: Run daily at 2 AM
 
 # Specific sync configuration
 sync:

@@ -13,6 +13,15 @@ class DriveSync:
         teslalogger_drives = self._fetch_teslalogger_drives()
         teslamate_drives = self._fetch_teslamate_drives()
 
+        # Validate fetched drives
+        if teslalogger_drives is None:
+            self.logger.error("Failed to fetch TeslaLogger drives")
+            return []
+        
+        if teslamate_drives is None:
+            self.logger.error("Failed to fetch TeslaMate drives")
+            return []
+
         # Find potential matches
         potential_merges = self._find_drive_matches(
             teslalogger_drives, 
@@ -20,6 +29,62 @@ class DriveSync:
         )
 
         return potential_merges
+
+    def _fetch_teslalogger_drives(self):
+        """
+        Fetch drives from TeslaLogger database
+        """
+        try:
+            # Example query - adjust based on your actual database schema
+            query = "SELECT * FROM drivestate LIMIT 1000"  # Adjust limit as needed
+            result = self.teslalogger_conn.execute(query)
+            
+            # Convert to list of dictionaries
+            drives = [
+                {
+                    'StartDate': row.StartDate,
+                    'EndDate': row.EndDate,
+                    'CarID': row.CarID,
+                    'distance': row.distance,
+                    'speed_max': row.speed_max,
+                    # Add other relevant fields
+                } for row in result
+            ]
+            
+            self.logger.info(f"Fetched {len(drives)} drives from TeslaLogger")
+            return drives
+        
+        except Exception as e:
+            self.logger.error(f"Error fetching TeslaLogger drives: {e}")
+            return None
+
+    def _fetch_teslamate_drives(self):
+        """
+        Fetch drives from TeslaMate database
+        """
+        try:
+            # Example query - adjust based on your actual database schema
+            query = "SELECT * FROM drives LIMIT 1000"  # Adjust limit as needed
+            result = self.teslamate_conn.execute(query)
+            
+            # Convert to list of dictionaries
+            drives = [
+                {
+                    'start_date': row.start_date,
+                    'end_date': row.end_date,
+                    'car_id': row.car_id,
+                    'distance': row.end_km - row.start_km,
+                    'speed_max': row.speed_max,
+                    # Add other relevant fields
+                } for row in result
+            ]
+            
+            self.logger.info(f"Fetched {len(drives)} drives from TeslaMate")
+            return drives
+        
+        except Exception as e:
+            self.logger.error(f"Error fetching TeslaMate drives: {e}")
+            return None
 
     def _find_drive_matches(self, teslalogger_drives, teslamate_drives):
         matches = []
@@ -39,7 +104,10 @@ class DriveSync:
         # Merge logic for drive records
         merged_drive = {
             'start_date': min(teslalogger_drive['StartDate'], teslamate_drive['start_date']),
-            'end_date': max(teslalogger_drive['EndDate'], teslamate_drive['end_date']),
+            'end_date': max(
+                teslalogger_drive.get('EndDate') or teslamate_drive['end_date'], 
+                teslamate_drive['end_date']
+            ),
             'car_id': teslalogger_drive['CarID'],
             'distance': max(
                 teslalogger_drive.get('distance', 0), 
@@ -64,13 +132,3 @@ class DriveSync:
             Potential drive merges detected.
             To apply changes, set DRYRUN=0
             """)
-
-    def _fetch_teslalogger_drives(self):
-        # Fetch drives from TeslaLogger database
-        # Implement database query
-        pass
-
-    def _fetch_teslamate_drives(self):
-        # Fetch drives from TeslaMate database
-        # Implement database query
-        pass
