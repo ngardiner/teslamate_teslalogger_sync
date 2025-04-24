@@ -1,5 +1,6 @@
 import logging
 from utils.helpers import haversine_distance
+from sqlalchemy import text
 
 class ChargingSync:
     def __init__(self, teslalogger_conn, teslamate_conn, dry_run):
@@ -69,11 +70,68 @@ class ChargingSync:
             """)
 
     def _fetch_teslalogger_charging(self):
-        # Fetch charging records from TeslaLogger database
-        # Implement database query
-        pass
+        """
+        Fetch charging records from TeslaLogger database
+        """
+        try:
+            # Use text() for raw SQL queries
+            query = text("SELECT * FROM charging LIMIT 1000")  # Adjust limit as needed
+            result = self.teslalogger_conn.execute(query)
+            
+            # Convert to list of dictionaries
+            charges = []
+            for row in result:
+                try:
+                    charge = {
+                        'Datum': row.Datum,
+                        'CarID': row.CarID,
+                        'charge_energy_added': row.charge_energy_added,
+                        'battery_level_start': row.battery_level_start,
+                        'battery_level_end': row.battery_level_end,
+                        'charger_power': row.charger_power,
+                        # Add other relevant fields
+                    }
+                    charges.append(charge)
+                except Exception as field_error:
+                    self.logger.warning(f"Could not process charging row: {field_error}")
+            
+            self.logger.info(f"Fetched {len(charges)} charging records from TeslaLogger")
+            return charges
+        
+        except Exception as e:
+            self.logger.error(f"Error fetching TeslaLogger charging records: {e}")
+            return None
 
     def _fetch_teslamate_charging(self):
-        # Fetch charging records from TeslaMate database
-        # Implement database query
-        pass
+        """
+        Fetch charging records from TeslaMate database
+        """
+        try:
+            # Use text() for raw SQL queries
+            query = text("SELECT * FROM charging_processes LIMIT 1000")  # Adjust limit as needed
+            result = self.teslamate_conn.execute(query)
+            
+            # Convert to list of dictionaries
+            charges = []
+            for row in result:
+                try:
+                    charge = {
+                        'date': row.start_date,
+                        'end_date': row.end_date,
+                        'car_id': row.car_id,
+                        'charge_energy_added': row.charge_energy_added,
+                        'battery_level_start': row.start_battery_level,
+                        'battery_level_end': row.end_battery_level,
+                        'charger_power': row.charge_power,
+                        # Add other relevant fields
+                    }
+                    charges.append(charge)
+                except Exception as field_error:
+                    self.logger.warning(f"Could not process TeslaMate charging row: {field_error}")
+            
+            self.logger.info(f"Fetched {len(charges)} charging records from TeslaMate")
+            return charges
+        
+        except Exception as e:
+            self.logger.error(f"Error fetching TeslaMate charging records: {e}")
+            return None

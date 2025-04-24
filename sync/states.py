@@ -1,5 +1,6 @@
 import logging
 from utils.helpers import haversine_distance
+from sqlalchemy import text
 
 class StateSync:
     def __init__(self, teslalogger_conn, teslamate_conn, dry_run):
@@ -65,11 +66,66 @@ class StateSync:
             """)
 
     def _fetch_teslalogger_states(self):
-        # Fetch state records from TeslaLogger database
-        # Implement database query
-        pass
+        """
+        Fetch state records from TeslaLogger database
+        """
+        try:
+            # Use text() for raw SQL queries
+            query = text("SELECT * FROM state LIMIT 1000")  # Adjust limit as needed
+            result = self.teslalogger_conn.execute(query)
+            
+            # Convert to list of dictionaries
+            states = []
+            for row in result:
+                try:
+                    state = {
+                        'StartDate': row.StartDate,
+                        'EndDate': row.EndDate,
+                        'CarID': row.CarID,
+                        'state': row.state,
+                        'battery_level': row.battery_level,
+                        'ideal_battery_range_km': row.ideal_battery_range_km,
+                        # Add other relevant fields
+                    }
+                    states.append(state)
+                except Exception as field_error:
+                    self.logger.warning(f"Could not process state row: {field_error}")
+            
+            self.logger.info(f"Fetched {len(states)} states from TeslaLogger")
+            return states
+        
+        except Exception as e:
+            self.logger.error(f"Error fetching TeslaLogger states: {e}")
+            return None
 
     def _fetch_teslamate_states(self):
-        # Fetch state records from TeslaMate database
-        # Implement database query
-        pass
+        """
+        Fetch state records from TeslaMate database
+        """
+        try:
+            # Use text() for raw SQL queries
+            query = text("SELECT * FROM states LIMIT 1000")  # Adjust limit as needed
+            result = self.teslamate_conn.execute(query)
+            
+            # Convert to list of dictionaries
+            states = []
+            for row in result:
+                try:
+                    state = {
+                        'start_date': row.start_date,
+                        'end_date': row.end_date,
+                        'car_id': row.car_id,
+                        'state': row.state,
+                        'battery_level': row.battery_level,
+                        # Add other relevant fields
+                    }
+                    states.append(state)
+                except Exception as field_error:
+                    self.logger.warning(f"Could not process TeslaMate state row: {field_error}")
+            
+            self.logger.info(f"Fetched {len(states)} states from TeslaMate")
+            return states
+        
+        except Exception as e:
+            self.logger.error(f"Error fetching TeslaMate states: {e}")
+            return None

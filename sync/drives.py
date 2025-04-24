@@ -1,5 +1,6 @@
 import logging
 from utils.helpers import haversine_distance
+from sqlalchemy import text
 
 class DriveSync:
     def __init__(self, teslalogger_conn, teslamate_conn, dry_run):
@@ -35,21 +36,25 @@ class DriveSync:
         Fetch drives from TeslaLogger database
         """
         try:
-            # Example query - adjust based on your actual database schema
-            query = "SELECT * FROM drivestate LIMIT 1000"  # Adjust limit as needed
+            # Use text() for raw SQL queries
+            query = text("SELECT * FROM drivestate LIMIT 1000")  # Adjust limit as needed
             result = self.teslalogger_conn.execute(query)
             
             # Convert to list of dictionaries
-            drives = [
-                {
-                    'StartDate': row.StartDate,
-                    'EndDate': row.EndDate,
-                    'CarID': row.CarID,
-                    'distance': row.distance,
-                    'speed_max': row.speed_max,
-                    # Add other relevant fields
-                } for row in result
-            ]
+            drives = []
+            for row in result:
+                try:
+                    drive = {
+                        'StartDate': row.StartDate,
+                        'EndDate': row.EndDate,
+                        'CarID': row.CarID,
+                        'distance': row.distance if hasattr(row, 'distance') else None,
+                        'speed_max': row.speed_max,
+                        # Add other relevant fields
+                    }
+                    drives.append(drive)
+                except Exception as field_error:
+                    self.logger.warning(f"Could not process drive row: {field_error}")
             
             self.logger.info(f"Fetched {len(drives)} drives from TeslaLogger")
             return drives
@@ -63,21 +68,25 @@ class DriveSync:
         Fetch drives from TeslaMate database
         """
         try:
-            # Example query - adjust based on your actual database schema
-            query = "SELECT * FROM drives LIMIT 1000"  # Adjust limit as needed
+            # Use text() for raw SQL queries
+            query = text("SELECT * FROM drives LIMIT 1000")  # Adjust limit as needed
             result = self.teslamate_conn.execute(query)
             
             # Convert to list of dictionaries
-            drives = [
-                {
-                    'start_date': row.start_date,
-                    'end_date': row.end_date,
-                    'car_id': row.car_id,
-                    'distance': row.end_km - row.start_km,
-                    'speed_max': row.speed_max,
-                    # Add other relevant fields
-                } for row in result
-            ]
+            drives = []
+            for row in result:
+                try:
+                    drive = {
+                        'start_date': row.start_date,
+                        'end_date': row.end_date,
+                        'car_id': row.car_id,
+                        'distance': row.end_km - row.start_km if hasattr(row, 'end_km') and hasattr(row, 'start_km') else None,
+                        'speed_max': row.speed_max,
+                        # Add other relevant fields
+                    }
+                    drives.append(drive)
+                except Exception as field_error:
+                    self.logger.warning(f"Could not process drive row: {field_error}")
             
             self.logger.info(f"Fetched {len(drives)} drives from TeslaMate")
             return drives

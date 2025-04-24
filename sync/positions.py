@@ -1,5 +1,6 @@
 import logging
 from utils.helpers import haversine_distance
+from sqlalchemy import text
 
 class PositionSync:
     def __init__(self, teslalogger_conn, teslamate_conn, dry_run, test_position):
@@ -36,19 +37,25 @@ class PositionSync:
         Fetch positions from TeslaLogger database
         """
         try:
-            # Example query - adjust based on your actual database schema
-            query = "SELECT * FROM pos LIMIT 1000"  # Adjust limit as needed
+            # Use text() for raw SQL queries
+            query = text("SELECT * FROM pos LIMIT 1000")  # Adjust limit as needed
             result = self.teslalogger_conn.execute(query)
             
             # Convert to list of dictionaries
-            positions = [
-                {
-                    'Datum': row.Datum,
-                    'lat': row.lat,
-                    'lng': row.lng,
-                    # Add other relevant fields
-                } for row in result
-            ]
+            positions = []
+            for row in result:
+                try:
+                    position = {
+                        'Datum': row.Datum,
+                        'lat': row.lat,
+                        'lng': row.lng,
+                        'ideal_battery_range_km': row.ideal_battery_range_km,
+                        'odometer': row.odometer,
+                        # Add other relevant fields
+                    }
+                    positions.append(position)
+                except Exception as field_error:
+                    self.logger.warning(f"Could not process row: {field_error}")
             
             self.logger.info(f"Fetched {len(positions)} positions from TeslaLogger")
             return positions
@@ -62,19 +69,25 @@ class PositionSync:
         Fetch positions from TeslaMate database
         """
         try:
-            # Example query - adjust based on your actual database schema
-            query = "SELECT * FROM positions LIMIT 1000"  # Adjust limit as needed
+            # Use text() for raw SQL queries
+            query = text("SELECT * FROM positions LIMIT 1000")  # Adjust limit as needed
             result = self.teslamate_conn.execute(query)
             
             # Convert to list of dictionaries
-            positions = [
-                {
-                    'date': row.date,
-                    'latitude': row.latitude,
-                    'longitude': row.longitude,
-                    # Add other relevant fields
-                } for row in result
-            ]
+            positions = []
+            for row in result:
+                try:
+                    position = {
+                        'date': row.date,
+                        'latitude': row.latitude,
+                        'longitude': row.longitude,
+                        'battery_level': row.battery_level,
+                        'odometer': row.odometer,
+                        # Add other relevant fields
+                    }
+                    positions.append(position)
+                except Exception as field_error:
+                    self.logger.warning(f"Could not process row: {field_error}")
             
             self.logger.info(f"Fetched {len(positions)} positions from TeslaMate")
             return positions
