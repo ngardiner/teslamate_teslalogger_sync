@@ -17,36 +17,55 @@ class PositionSync:
         """
         Sync positions between TeslaLogger and TeslaMate databases.
         """
-        # Fetch positions from both databases
-        teslalogger_positions = self._fetch_teslalogger_positions()
-        teslamate_positions = self._fetch_teslamate_positions()
+        # Get the list of distinct dates
+        distinct_dates = self._get_distinct_dates()
 
-        # Validate fetched positions
-        if teslalogger_positions is None:
-            self.logger.error("Failed to fetch TeslaLogger positions")
-            return []
-        
-        if teslamate_positions is None:
-            self.logger.error("Failed to fetch TeslaMate positions")
-            return []
+        # Iterate through each date and process positions
+        for date in distinct_dates:
+            self.logger.info(f"Processing positions for date: {date}")
+            
+            # Fetch positions for the specific date
+            teslalogger_positions = self._fetch_teslalogger_positions(date)
+            teslamate_positions = self._fetch_teslamate_positions(date)
 
-        # Find potential matches
-        potential_merges = self._find_position_matches(
-            teslalogger_positions, 
-            teslamate_positions
-        )
+            # Validate fetched positions
+            if teslalogger_positions is None:
+                self.logger.error(f"Failed to fetch TeslaLogger positions for date: {date}")
+                return []
+            
+            if teslamate_positions is None:
+                self.logger.error(f"Failed to fetch TeslaMate positions for date: {date}")
+                return []
 
-        return potential_merges
+            # Find potential matches
+            potential_merges = self._find_position_matches(
+                teslalogger_positions, 
+                teslamate_positions
+            )
 
-    def _fetch_teslalogger_positions(self):
+            return potential_merges
+
+    def _get_distinct_dates(self):
         """
-        Fetch positions from TeslaLogger database
+        Retrieve a list of distinct dates from both databases.
         """
         try:
-            # Use the position_limit parameter to limit the query
-            limit_clause = f"LIMIT {self.position_limit}" if self.position_limit > 0 else ""
-            query = text(f"SELECT * FROM pos {limit_clause}")
+            query = text("SELECT DISTINCT DATE(Datum) as date FROM pos ORDER BY date")
             result = self.teslalogger_conn.execute(query)
+            dates = [row.date for row in result]
+            self.logger.info(f"Found {len(dates)} distinct dates in TeslaLogger database")
+            return dates
+        except Exception as e:
+            self.logger.error(f"Error fetching distinct dates: {e}")
+            return []
+
+    def _fetch_teslalogger_positions(self, date):
+        """
+        Fetch positions from TeslaLogger database for a specific date.
+        """
+        try:
+            query = text(f"SELECT * FROM pos WHERE DATE(Datum) = :date")
+            result = self.teslalogger_conn.execute(query, {'date': date})
             
             # Convert to list of dictionaries
             positions = []
@@ -68,22 +87,20 @@ class PositionSync:
                 except Exception as field_error:
                     self.logger.warning(f"Could not process row: {field_error}")
             
-            self.logger.info(f"Fetched {len(positions)} positions from TeslaLogger")
+            self.logger.info(f"Fetched {len(positions)} positions from TeslaLogger for date: {date}")
             return positions
         
         except Exception as e:
-            self.logger.error(f"Error fetching TeslaLogger positions: {e}")
+            self.logger.error(f"Error fetching TeslaLogger positions for date {date}: {e}")
             return None
 
-    def _fetch_teslamate_positions(self):
+    def _fetch_teslamate_positions(self, date):
         """
-        Fetch positions from TeslaMate database
+        Fetch positions from TeslaMate database for a specific date.
         """
         try:
-            # Use the position_limit parameter to limit the query
-            limit_clause = f"LIMIT {self.position_limit}" if self.position_limit > 0 else ""
-            query = text(f"SELECT * FROM positions {limit_clause}")
-            result = self.teslamate_conn.execute(query)
+            query = text(f"SELECT * FROM positions WHERE DATE(date) = :date")
+            result = self.teslamate_conn.execute(query, {'date': date})
             
             # Convert to list of dictionaries
             positions = []
@@ -104,11 +121,11 @@ class PositionSync:
                 except Exception as field_error:
                     self.logger.warning(f"Could not process row: {field_error}")
             
-            self.logger.info(f"Fetched {len(positions)} positions from TeslaMate")
+            self.logger.info(f"Fetched {len(positions)} positions from TeslaMate for date: {date}")
             return positions
         
         except Exception as e:
-            self.logger.error(f"Error fetching TeslaMate positions: {e}")
+            self.logger.error(f"Error fetching TeslaMate positions for date {date}: {e}")
             return None
 
     def _find_position_matches(self, teslalogger_pos, teslamate_pos):
