@@ -25,12 +25,12 @@ def main():
         teslamate_conn = establish_teslamate_connection(config)
 
         # Sync configuration from config
-        sync_positions = config.SYNC_POSITIONS
-        sync_drives = config.SYNC_DRIVES
-        sync_charging = config.SYNC_CHARGING
-        sync_states = config.SYNC_STATES
-        dry_run = config.DRYRUN
-        test_position = config.TEST_POSITION
+        sync_positions = config.sync_config['sync_positions']
+        sync_drives = config.sync_config['sync_drives']
+        sync_charging = config.sync_config['sync_charging']
+        sync_states = config.sync_config['sync_states']
+        dry_run = config.sync_config['dry_run']
+        test_position = config.sync_config['test_position']
 
         # Debug logging
         logger.info(f"Sync Configuration:")
