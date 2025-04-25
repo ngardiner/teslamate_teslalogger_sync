@@ -76,8 +76,8 @@ class PositionSync:
                     position = {
                         'Datum': row.Datum,
                         'CarID': row.CarID,
-                        'lat': float(getattr(row, 'lat', None)) if tl_pos['lat'] is not None else None,
-                        'lng': float(getattr(row, 'lng', None)) if tl_pos['lng'] is not None else None,
+                        'lat': float(getattr(row, 'lat', None)) if getattr(row, 'lat', None) is not None else None,
+                        'lng': float(getattr(row, 'lng', None)) if getattr(row, 'lng', None) is not None else None,
                         'battery_level': getattr(row, 'battery_level', None),
                         'ideal_battery_range_km': getattr(row, 'ideal_battery_range_km', None),
                         'odometer': getattr(row, 'odometer', None),
@@ -111,8 +111,8 @@ class PositionSync:
                     position = {
                         'date': row.date,
                         'car_id': row.car_id,
-                        'latitude': float(getattr(row, 'latitude', None)) if tm_pos['latitude'] is not None else None,
-                        'longitude': float(getattr(row, 'longitude', None)) if tm_pos['longitude'] is not None else None,
+                        'latitude': float(getattr(row, 'latitude', None)) if getattr(row, 'latitude', None) is not None else None,
+                        'longitude': float(getattr(row, 'longitude', None)) if getattr(row, 'longitude', None) is not None else None,
                         'battery_level': getattr(row, 'battery_level', None),
                         'odometer': getattr(row, 'odometer', None),
                         'speed': getattr(row, 'speed', None),
