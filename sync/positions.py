@@ -5,6 +5,7 @@ from datetime import timedelta
 
 class PositionSync:
     def __init__(self, teslalogger_conn, teslamate_conn, dry_run, test_position, stats, position_limit):
+        self.debug_print = 1
         self.teslalogger_conn = teslalogger_conn
         self.teslamate_conn = teslamate_conn
         self.dry_run = dry_run
@@ -137,6 +138,12 @@ class PositionSync:
 
         for tl_pos in teslalogger_pos:
             match_found = False
+
+            # When debug is enabled, show what the comparative position values are
+            if self.debug_print:
+                print(tm_pos)
+                print(tl_pos)
+                self.debug_print = 0
 
             for tm_pos in teslamate_pos:
                 # Check if positions are identical
