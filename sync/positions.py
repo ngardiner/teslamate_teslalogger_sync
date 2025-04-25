@@ -153,6 +153,8 @@ class PositionSync:
                     tl_pos['lat'] == tm_pos['latitude'] and
                     tl_pos['lng'] == tm_pos['longitude']):
                     self.stats['identical'] += 1
+                    teslalogger_pos.remove(tl_pos)  # Remove from TeslaLogger list
+                    teslamate_pos.remove(tm_pos)   # Remove from TeslaMate list
                     match_found = True
                     break
 
@@ -173,11 +175,13 @@ class PositionSync:
 
                     # Validate based on distance threshold
                     if car_match and distance <= 10:  # 10 meters proximity
-                        merged_pos = self._merge_position_record(tl_pos, tm_pos)
-                        matches.append(merged_pos)
-                        self.stats['validated'] += 1
+                        #merged_pos = self._merge_position_record(tl_pos, tm_pos)
+                        matches.append(tl_pos)
+                        self.stats['added'] += 1
                         match_found = True
                         break
+                    else:
+                        self.stats['invalid'] += 1
 
             # If no match was found within 30 seconds, add the position
             if not match_found:

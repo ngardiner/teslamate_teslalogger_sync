@@ -44,7 +44,7 @@ def main():
 
         # Initialize stats hash
         stats = {
-            'positions': {'identical': 0, 'validated': 0, 'added': 0},
+            'positions': {'identical': 0, 'invalid': 0, 'added': 0},
             'drives': {},
             'charging': {'processed': 0, 'skipped': 0},
             'states': {}
