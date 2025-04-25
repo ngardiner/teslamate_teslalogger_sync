@@ -31,6 +31,7 @@ def main():
         sync_states = config.sync_config['sync_states']
         dry_run = config.sync_config['dry_run']
         test_position = config.sync_config['test_position']
+        position_limit = config.sync_config['position_limit']
 
         # Debug logging
         logger.info(f"Sync Configuration:")
@@ -39,6 +40,7 @@ def main():
         logger.info(f"Charging: {sync_charging}")
         logger.info(f"States: {sync_states}")
         logger.info(f"Dry Run: {dry_run}")
+        logger.info(f"Position Limit: {position_limit}")
 
         # Initialize stats hash
         stats = {
@@ -51,7 +53,7 @@ def main():
         # Sync engines
         engines = []
         if sync_positions:
-            engines.append(PositionSync(teslalogger_conn, teslamate_conn, dry_run, test_position, stats['positions']))
+            engines.append(PositionSync(teslalogger_conn, teslamate_conn, dry_run, test_position, stats['positions'], position_limit))
         if sync_drives:
             engines.append(DriveSync(teslalogger_conn, teslamate_conn, dry_run, stats['drives']))
         if sync_charging:

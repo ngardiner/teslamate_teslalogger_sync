@@ -4,12 +4,13 @@ from sqlalchemy import text
 from datetime import timedelta
 
 class PositionSync:
-    def __init__(self, teslalogger_conn, teslamate_conn, dry_run, test_position, stats):
+    def __init__(self, teslalogger_conn, teslamate_conn, dry_run, test_position, stats, position_limit):
         self.teslalogger_conn = teslalogger_conn
         self.teslamate_conn = teslamate_conn
         self.dry_run = dry_run
         self.test_position = test_position
         self.stats = stats  # Reference to the subkey of the stats hash
+        self.position_limit = position_limit  # Limit for the number of positions to fetch
         self.logger = logging.getLogger(__name__)
 
     def sync(self):
@@ -42,8 +43,9 @@ class PositionSync:
         Fetch positions from TeslaLogger database
         """
         try:
-            # Use text() for raw SQL queries
-            query = text("SELECT * FROM pos LIMIT 1000")  # Adjust limit as needed
+            # Use the position_limit parameter to limit the query
+            limit_clause = f"LIMIT {self.position_limit}" if self.position_limit > 0 else ""
+            query = text(f"SELECT * FROM pos {limit_clause}")
             result = self.teslalogger_conn.execute(query)
             
             # Convert to list of dictionaries
@@ -78,8 +80,9 @@ class PositionSync:
         Fetch positions from TeslaMate database
         """
         try:
-            # Use text() for raw SQL queries
-            query = text("SELECT * FROM positions LIMIT 1000")  # Adjust limit as needed
+            # Use the position_limit parameter to limit the query
+            limit_clause = f"LIMIT {self.position_limit}" if self.position_limit > 0 else ""
+            query = text(f"SELECT * FROM positions {limit_clause}")
             result = self.teslamate_conn.execute(query)
             
             # Convert to list of dictionaries
