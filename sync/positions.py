@@ -4,14 +4,18 @@ from sqlalchemy import text
 from datetime import timedelta
 
 class PositionSync:
-    def __init__(self, teslalogger_conn, teslamate_conn, dry_run, test_position):
+    def __init__(self, teslalogger_conn, teslamate_conn, dry_run, test_position, stats):
         self.teslalogger_conn = teslalogger_conn
         self.teslamate_conn = teslamate_conn
         self.dry_run = dry_run
         self.test_position = test_position
+        self.stats = stats  # Reference to the subkey of the stats hash
         self.logger = logging.getLogger(__name__)
 
     def sync(self):
+        """
+        Sync positions between TeslaLogger and TeslaMate databases.
+        """
         # Fetch positions from both databases
         teslalogger_positions = self._fetch_teslalogger_positions()
         teslamate_positions = self._fetch_teslamate_positions()
@@ -105,34 +109,51 @@ class PositionSync:
             return None
 
     def _find_position_matches(self, teslalogger_pos, teslamate_pos):
+        """
+        Find matches between TeslaLogger and TeslaMate positions.
+        """
         matches = []
-        
+
         for tl_pos in teslalogger_pos:
+            match_found = False
+
             for tm_pos in teslamate_pos:
-                # Match criteria
+                # Check if positions are identical
+                if (tl_pos['Datum'] == tm_pos['date'] and
+                    tl_pos['CarID'] == tm_pos['car_id'] and
+                    tl_pos['lat'] == tm_pos['latitude'] and
+                    tl_pos['lng'] == tm_pos['longitude']):
+                    self.stats['identical'] += 1
+                    match_found = True
+                    break
+
                 # Compare timestamps with a 30-second tolerance
                 time_diff = abs(tl_pos['Datum'] - tm_pos['date'])
-                
-                # Check if positions are from the same car
-                car_match = (tl_pos.get('CarID') == tm_pos.get('car_id'))
-                
-                # Calculate distance between positions
-                if (tl_pos['lat'] and tl_pos['lng'] and 
-                    tm_pos['latitude'] and tm_pos['longitude']):
-                    distance = haversine_distance(
-                        tl_pos['lat'], tl_pos['lng'],
-                        tm_pos['latitude'], tm_pos['longitude']
-                    )
-                else:
-                    distance = float('inf')
-                
-                # Combine match criteria
-                if (time_diff <= timedelta(seconds=30) and 
-                    car_match and 
-                    distance <= 10):  # 10 meters proximity
-                    
-                    merged_pos = self._merge_position_record(tl_pos, tm_pos)
-                    matches.append(merged_pos)
+                if time_diff <= timedelta(seconds=30):
+                    car_match = (tl_pos.get('CarID') == tm_pos.get('car_id'))
+
+                    # Calculate distance between positions
+                    if (tl_pos['lat'] and tl_pos['lng'] and 
+                        tm_pos['latitude'] and tm_pos['longitude']):
+                        distance = haversine_distance(
+                            tl_pos['lat'], tl_pos['lng'],
+                            tm_pos['latitude'], tm_pos['longitude']
+                        )
+                    else:
+                        distance = float('inf')
+
+                    # Validate based on distance threshold
+                    if car_match and distance <= 10:  # 10 meters proximity
+                        merged_pos = self._merge_position_record(tl_pos, tm_pos)
+                        matches.append(merged_pos)
+                        self.stats['validated'] += 1
+                        match_found = True
+                        break
+
+            # If no match was found within 30 seconds, add the position
+            if not match_found:
+                self.stats['added'] += 1
+                matches.append(tl_pos)
 
         return matches
 

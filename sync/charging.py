@@ -3,10 +3,11 @@ from utils.helpers import haversine_distance
 from sqlalchemy import text
 
 class ChargingSync:
-    def __init__(self, teslalogger_conn, teslamate_conn, dry_run):
+    def __init__(self, teslalogger_conn, teslamate_conn, dry_run, stats):
         self.teslalogger_conn = teslalogger_conn
         self.teslamate_conn = teslamate_conn
         self.dry_run = dry_run
+        self.stats = stats  # Reference to the subkey of the stats hash 
         self.logger = logging.getLogger(__name__)
 
     def sync(self):
@@ -49,12 +50,25 @@ class ChargingSync:
                     merged_charge = self._merge_charging_record(tl_charge, tm_charge)
                     matches.append(merged_charge)
 
+                    # Update stats
+                    self.stats['processed'] += len(teslalogger_charging)
+                else:
+                    self.stats['skipped'] += len(teslalogger_charging) - len(potential_merges)
+
+
         return matches
 
     def _merge_charging_record(self, teslalogger_charge, teslamate_charge):
         # Merge logic for charging records
         merged_charge = {
-            'start_date': min(teslalogger_charge['Datum'], teslamate_charge['date']),
+            'start_date': min(
+                teslalogger_charge['Datum'], 
+                teslamate_charge['start_date']
+            ),
+            'end_date': max(
+                teslalogger_charge.get('EndDate') or teslamate_charge['end_date'], 
+                teslamate_charge['end_date']
+            ),
             'car_id': teslalogger_charge['CarID'],
             'charge_energy_added': max(
                 teslalogger_charge.get('charge_energy_added', 0), 
@@ -68,7 +82,18 @@ class ChargingSync:
                 teslalogger_charge.get('charger_power', 0), 
                 teslamate_charge.get('charger_power', 0)
             ),
-            # Add more merged fields as needed
+            'location': {
+                'latitude': teslalogger_charge.get('latitude') or teslamate_charge.get('latitude'),
+                'longitude': teslalogger_charge.get('longitude') or teslamate_charge.get('longitude')
+            },
+            'cost_total': max(
+                teslalogger_charge.get('cost_total', 0) or 0, 
+                teslamate_charge.get('cost_total', 0) or 0
+            ),
+            'fast_charger_brand': (
+                teslalogger_charge.get('fast_charger_brand') or 
+                teslamate_charge.get('fast_charger_brand')
+            ),        
         }
         return merged_charge
 
@@ -104,7 +129,17 @@ class ChargingSync:
                         'battery_level_start': row.battery_level_start,
                         'battery_level_end': row.battery_level_end,
                         'charger_power': row.charger_power,
-                        # Add other relevant fields
+                        'start_date': row.start_date,
+                        'end_date': row.end_date,
+                        'car_id': row.car_id,
+                        'charge_energy_added': getattr(row, 'charge_energy_added', None),
+                        'battery_level_start': getattr(row, 'start_battery_level', None),
+                        'battery_level_end': getattr(row, 'end_battery_level', None),
+                        'charger_power': getattr(row, 'charge_power', None),
+                        'latitude': getattr(row, 'latitude', None),
+                        'longitude': getattr(row, 'longitude', None),
+                        'cost_total': getattr(row, 'cost_total', None),
+                        'fast_charger_brand': getattr(row, 'fast_charger_brand', None),
                     }
                     charges.append(charge)
                 except Exception as field_error:

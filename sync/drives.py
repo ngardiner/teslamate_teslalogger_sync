@@ -4,10 +4,11 @@ from sqlalchemy import text
 from datetime import timedelta
 
 class DriveSync:
-    def __init__(self, teslalogger_conn, teslamate_conn, dry_run):
+    def __init__(self, teslalogger_conn, teslamate_conn, dry_run, stats):
         self.teslalogger_conn = teslalogger_conn
         self.teslamate_conn = teslamate_conn
         self.dry_run = dry_run
+        self.stats = stats  # Reference to the subkey of the stats hash 
         self.logger = logging.getLogger(__name__)
 
     def sync(self):

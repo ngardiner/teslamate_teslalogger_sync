@@ -40,16 +40,24 @@ def main():
         logger.info(f"States: {sync_states}")
         logger.info(f"Dry Run: {dry_run}")
 
+        # Initialize stats hash
+        stats = {
+            'positions': {'identical': 0, 'validated': 0, 'added': 0},
+            'drives': {},
+            'charging': {'processed': 0, 'skipped': 0},
+            'states': {}
+        }
+
         # Sync engines
         engines = []
         if sync_positions:
-            engines.append(PositionSync(teslalogger_conn, teslamate_conn, dry_run, test_position))
+            engines.append(PositionSync(teslalogger_conn, teslamate_conn, dry_run, test_position, stats['positions']))
         if sync_drives:
-            engines.append(DriveSync(teslalogger_conn, teslamate_conn, dry_run))
+            engines.append(DriveSync(teslalogger_conn, teslamate_conn, dry_run, stats['drives']))
         if sync_charging:
-            engines.append(ChargingSync(teslalogger_conn, teslamate_conn, dry_run))
+            engines.append(ChargingSync(teslalogger_conn, teslamate_conn, dry_run, stats['charging']))
         if sync_states:
-            engines.append(StateSync(teslalogger_conn, teslamate_conn, dry_run))
+            engines.append(StateSync(teslalogger_conn, teslamate_conn, dry_run, stats['states']))
 
         # Perform syncs
         for engine in engines:
@@ -58,9 +66,12 @@ def main():
             
             # Log merge details
             if potential_merges:
-                engine.log_potential_merges(potential_merges)
+                logger.info(f"Potential merges for {engine.__class__.__name__}: {len(potential_merges)}")
             else:
                 logger.warning(f"No potential merges found for {engine.__class__.__name__}")
+
+        # Log final stats
+        logger.info(f"Final Sync Stats: {stats}")
 
     except Exception as e:
         logger.error(f"Sync failed: {e}", exc_info=True)
