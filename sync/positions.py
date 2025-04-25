@@ -139,13 +139,14 @@ class PositionSync:
         for tl_pos in teslalogger_pos:
             match_found = False
 
-            # When debug is enabled, show what the comparative position values are
-            if self.debug_print:
-                print(tm_pos)
-                print(tl_pos)
-                self.debug_print = 0
-
             for tm_pos in teslamate_pos:
+
+                # When debug is enabled, show what the comparative position values are
+                if self.debug_print:
+                    print(tm_pos)
+                    print(tl_pos)
+                    self.debug_print = 0
+
                 # Check if positions are identical
                 if (tl_pos['Datum'] == tm_pos['date'] and
                     tl_pos['CarID'] == tm_pos['car_id'] and
