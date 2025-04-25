@@ -19,6 +19,7 @@ class PositionSync:
         """
         # Get the list of distinct dates
         distinct_dates = self._get_distinct_dates()
+        potential_merges = []
 
         # Iterate through each date and process positions
         for date in distinct_dates:
@@ -38,12 +39,12 @@ class PositionSync:
                 return []
 
             # Find potential matches
-            potential_merges = self._find_position_matches(
+            potential_merges.append(self._find_position_matches(
                 teslalogger_positions, 
                 teslamate_positions
-            )
+            ))
 
-            return potential_merges
+        return potential_merges
 
     def _get_distinct_dates(self):
         """
