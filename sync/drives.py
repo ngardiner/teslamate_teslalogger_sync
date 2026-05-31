@@ -128,12 +128,13 @@ class DriveSync:
                     distance_match = abs(tl_drive['distance'] - tm_drive['distance']) < 1  # 1 km tolerance
                 
                 # Combine match criteria
-                if (time_diff <= timedelta(minutes=5) and 
-                    car_match and 
+                if (time_diff <= timedelta(minutes=5) and
+                    car_match and
                     distance_match):
-                    
+
                     merged_drive = self._merge_drive_record(tl_drive, tm_drive)
                     matches.append(merged_drive)
+                    break
 
         return matches
 

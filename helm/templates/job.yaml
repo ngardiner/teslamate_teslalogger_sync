@@ -10,8 +10,8 @@ metadata:
     "helm.sh/hook-weight": "5"
     "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
 spec:
-  backoffLimit: 3  # Number of retries before marking job as failed
-  activeDeadlineSeconds: 3600  # Maximum time the job can run
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds | default 86400 }}
   template:
     metadata:
       labels:

@@ -42,19 +42,20 @@ class ChargingSync:
         matches = []
         
         for tl_charge in teslalogger_charging:
+            match_found = False
             for tm_charge in teslamate_charging:
                 # Match criteria
                 if (abs((tl_charge['Datum'] - tm_charge['date']).total_seconds()) <= 300 and
                     tl_charge['CarID'] == tm_charge['car_id']):
-                    
+
                     merged_charge = self._merge_charging_record(tl_charge, tm_charge)
                     matches.append(merged_charge)
+                    self.stats['processed'] += 1
+                    match_found = True
+                    break
 
-                    # Update stats
-                    self.stats['processed'] += len(teslalogger_charging)
-                else:
-                    self.stats['skipped'] += len(teslalogger_charging) - len(potential_merges)
-
+            if not match_found:
+                self.stats['skipped'] += 1
 
         return matches
 

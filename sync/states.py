@@ -51,9 +51,9 @@ class StateSync:
                 
                 # Compare state attributes
                 state_match = (
-                    tl_state.get('state') == tm_state.get('state') or
-                    tl_state.get('state') is None or
-                    tm_state.get('state') is None
+                    tl_state.get('state') is not None and
+                    tm_state.get('state') is not None and
+                    tl_state.get('state') == tm_state.get('state')
                 )
                 
                 # Combine match criteria
