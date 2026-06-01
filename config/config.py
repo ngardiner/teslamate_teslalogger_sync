@@ -66,24 +66,3 @@ class Config:
             'dry_run': os.getenv('DRYRUN', '1') == '1'
         }
 
-    def get_database_connection_string(self, db_config):
-        """
-        Generate SQLAlchemy connection string
-        """
-        return (
-            f"{db_config['dialect']}://"
-            f"{db_config['user']}:{db_config['password']}@"
-            f"{db_config['host']}:{db_config['port']}/"
-            f"{db_config['database']}"
-        )
-
-def load_config():
-    """
-    Load and return configuration
-    """
-    try:
-        config = Config()
-        return config
-    except Exception as e:
-        logging.error(f"Failed to load configuration: {e}")
-        raise

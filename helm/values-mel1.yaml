@@ -1,0 +1,45 @@
+image:
+  repository: harbor.nate.id.au/library/tesla-sync
+  tag: "1.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: harbor-registry-secret
+
+env:
+  TESLALOGGER_DB_HOST: teslalogger-mariadb.default.svc.cluster.local
+  TESLALOGGER_DB_PORT: "3306"
+  TESLALOGGER_DB_NAME: teslalogger
+  TESLALOGGER_DB_USER: teslalogger
+
+  TESLAMATE_DB_HOST: teslamate-postgresql.default.svc.cluster.local
+  TESLAMATE_DB_PORT: "5432"
+  TESLAMATE_DB_NAME: teslamate
+  TESLAMATE_DB_USER: teslamate
+
+  DRYRUN: "1"
+  SYNC_POSITIONS: "0"
+  SYNC_DRIVES: "0"
+  SYNC_CHARGING: "0"
+  SYNC_STATES: "0"
+  LOG_LEVEL: INFO
+
+secrets:
+  teslaloggerDbPassword: teslalogger
+  teslamateDbPassword: teslamate
+
+activeDeadlineSeconds: 86400
+
+schedule:
+  enabled: false
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector:
+  kubernetes.io/arch: arm64

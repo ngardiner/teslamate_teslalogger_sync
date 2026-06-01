@@ -1,188 +1,114 @@
 import logging
-from utils.helpers import haversine_distance
+from collections import deque
+from datetime import timedelta
 from sqlalchemy import text
 
+
 class ChargingSync:
-    def __init__(self, teslalogger_conn, teslamate_conn, dry_run, stats):
-        self.teslalogger_conn = teslalogger_conn
-        self.teslamate_conn = teslamate_conn
+    WINDOW = timedelta(minutes=5)
+
+    def __init__(self, tl_engine, tm_engine, dry_run, stats):
+        self.tl_engine = tl_engine
+        self.tm_engine = tm_engine
         self.dry_run = dry_run
-        self.stats = stats  # Reference to the subkey of the stats hash 
+        self.stats = stats
         self.logger = logging.getLogger(__name__)
 
     def sync(self):
-        # Fetch charging records from both databases
-        teslalogger_charging = self._fetch_teslalogger_charging()
-        teslamate_charging = self._fetch_teslamate_charging()
-
-        # Validate fetched charging records
-        if teslalogger_charging is None:
-            self.logger.error("Failed to fetch TeslaLogger charging records")
-            # Return empty list instead of None
-            return []
-        
-        if teslamate_charging is None:
-            self.logger.error("Failed to fetch TeslaMate charging records")
-            # Return empty list instead of None
-            return []
-
-        # Detailed logging
-        self.logger.info(f"TeslaLogger Charging Records: {len(teslalogger_charging)}")
-        self.logger.info(f"TeslaMate Charging Records: {len(teslamate_charging)}")
-
-        # Find potential matches
-        potential_merges = self._find_charging_matches(
-            teslalogger_charging, 
-            teslamate_charging
+        return self._match(
+            self._stream_teslalogger(),
+            self._stream_teslamate(),
         )
 
-        return potential_merges
-
-    def _find_charging_matches(self, teslalogger_charging, teslamate_charging):
+    def _match(self, tl_stream, tm_stream):
+        """Sorted merge-join over two charging streams."""
+        tm_window = deque()
+        tm_exhausted = False
+        tm_iter = iter(tm_stream)
         matches = []
-        
-        for tl_charge in teslalogger_charging:
-            match_found = False
-            for tm_charge in teslamate_charging:
-                # Match criteria
-                if (abs((tl_charge['Datum'] - tm_charge['date']).total_seconds()) <= 300 and
-                    tl_charge['CarID'] == tm_charge['car_id']):
+        tl_count = 0
 
-                    merged_charge = self._merge_charging_record(tl_charge, tm_charge)
-                    matches.append(merged_charge)
+        for tl in tl_stream:
+            tl_count += 1
+            tl_ts = tl['Datum']
+
+            while tm_window and tm_window[0]['start_date'] < tl_ts - self.WINDOW:
+                tm_window.popleft()
+
+            if not tm_exhausted:
+                while True:
+                    try:
+                        tm = next(tm_iter)
+                        tm_window.append(tm)
+                        if tm['start_date'] > tl_ts + self.WINDOW:
+                            break
+                    except StopIteration:
+                        tm_exhausted = True
+                        break
+
+            matched = False
+            for tm in list(tm_window):
+                if (tl['CarID'] == tm['car_id'] and
+                        abs(tl_ts - tm['start_date']) <= self.WINDOW):
+                    matches.append(self._merge(tl, tm))
+                    tm_window.remove(tm)
                     self.stats['processed'] += 1
-                    match_found = True
+                    matched = True
                     break
 
-            if not match_found:
+            if not matched:
                 self.stats['skipped'] += 1
 
+        self.logger.info(f"Charging: {tl_count} TeslaLogger, {len(matches)} matched")
         return matches
 
-    def _merge_charging_record(self, teslalogger_charge, teslamate_charge):
-        # Merge logic for charging records
-        merged_charge = {
-            'start_date': min(
-                teslalogger_charge['Datum'], 
-                teslamate_charge['start_date']
-            ),
-            'end_date': max(
-                teslalogger_charge.get('EndDate') or teslamate_charge['end_date'], 
-                teslamate_charge['end_date']
-            ),
-            'car_id': teslalogger_charge['CarID'],
-            'charge_energy_added': max(
-                teslalogger_charge.get('charge_energy_added', 0), 
-                teslamate_charge.get('charge_energy_added', 0)
-            ),
-            'battery_level': {
-                'start': teslalogger_charge.get('battery_level'),
-                'end': teslamate_charge.get('end_battery_level')
-            },
-            'charger_power': max(
-                teslalogger_charge.get('charger_power', 0), 
-                teslamate_charge.get('charger_power', 0)
-            ),
-            'location': {
-                'latitude': teslalogger_charge.get('latitude') or teslamate_charge.get('latitude'),
-                'longitude': teslalogger_charge.get('longitude') or teslamate_charge.get('longitude')
-            },
-            'cost_total': max(
-                teslalogger_charge.get('cost_total', 0) or 0, 
-                teslamate_charge.get('cost_total', 0) or 0
-            ),
-            'fast_charger_brand': (
-                teslalogger_charge.get('fast_charger_brand') or 
-                teslamate_charge.get('fast_charger_brand')
-            ),        
+    def _merge(self, tl, tm):
+        return {
+            'start_date': min(tl['Datum'], tm['start_date']),
+            'end_date': tm['end_date'],
+            'car_id': tl['CarID'],
+            'charge_energy_added': max(tl.get('charge_energy_added') or 0, tm.get('charge_energy_added') or 0),
+            'battery_level_start': tm.get('battery_level_start'),
+            'battery_level_end': tm.get('battery_level_end'),
+            'battery_level_snapshot': tl.get('battery_level'),
+            'charger_power': tl.get('charger_power'),
+            'cost': tm.get('cost'),
         }
-        return merged_charge
+
+    def _stream_teslalogger(self):
+        query = text("""
+            SELECT Datum, CarID, charge_energy_added, battery_level,
+                   charger_power, ideal_battery_range_km
+            FROM charging ORDER BY Datum
+        """)
+        with self.tl_engine.connect().execution_options(stream_results=True) as conn:
+            for row in conn.execute(query):
+                yield {
+                    'Datum': row.Datum,
+                    'CarID': row.CarID,
+                    'charge_energy_added': row.charge_energy_added,
+                    'battery_level': row.battery_level,
+                    'charger_power': row.charger_power,
+                    'ideal_battery_range_km': row.ideal_battery_range_km,
+                }
+
+    def _stream_teslamate(self):
+        query = text("""
+            SELECT start_date, end_date, car_id, charge_energy_added,
+                   start_battery_level, end_battery_level, cost
+            FROM charging_processes ORDER BY start_date
+        """)
+        with self.tm_engine.connect().execution_options(stream_results=True) as conn:
+            for row in conn.execute(query):
+                yield {
+                    'start_date': row.start_date,
+                    'end_date': row.end_date,
+                    'car_id': row.car_id,
+                    'charge_energy_added': row.charge_energy_added,
+                    'battery_level_start': row.start_battery_level,
+                    'battery_level_end': row.end_battery_level,
+                    'cost': row.cost,
+                }
 
     def log_potential_merges(self, potential_merges):
-        self.logger.info(f"Dry Run - Potential Charging Merges: {len(potential_merges)}")
-        for merge in potential_merges:
-            self.logger.info(f"Would merge charging record: {merge}")
-
-        if potential_merges:
-            self.logger.warning("""
-            DRY RUN MODE ACTIVE
-            Potential charging merges detected.
-            To apply changes, set DRYRUN=0
-            """)
-
-    def _fetch_teslalogger_charging(self):
-        """
-        Fetch charging records from TeslaLogger database
-        """
-        try:
-            # Use text() for raw SQL queries
-            query = text("SELECT * FROM charging LIMIT 1000")  # Adjust limit as needed
-            result = self.teslalogger_conn.execute(query)
-            
-            # Convert to list of dictionaries
-            charges = []
-            for row in result:
-                try:
-                    charge = {
-                        'Datum': row.Datum,
-                        'CarID': row.CarID,
-                        'charge_energy_added': row.charge_energy_added,
-                        'battery_level_start': row.battery_level_start,
-                        'battery_level_end': row.battery_level_end,
-                        'charger_power': row.charger_power,
-                        'start_date': row.start_date,
-                        'end_date': row.end_date,
-                        'car_id': row.car_id,
-                        'charge_energy_added': getattr(row, 'charge_energy_added', None),
-                        'battery_level_start': getattr(row, 'start_battery_level', None),
-                        'battery_level_end': getattr(row, 'end_battery_level', None),
-                        'charger_power': getattr(row, 'charge_power', None),
-                        'latitude': getattr(row, 'latitude', None),
-                        'longitude': getattr(row, 'longitude', None),
-                        'cost_total': getattr(row, 'cost_total', None),
-                        'fast_charger_brand': getattr(row, 'fast_charger_brand', None),
-                    }
-                    charges.append(charge)
-                except Exception as field_error:
-                    self.logger.warning(f"Could not process charging row: {field_error}")
-            
-            self.logger.info(f"Fetched {len(charges)} charging records from TeslaLogger")
-            return charges
-        
-        except Exception as e:
-            self.logger.error(f"Error fetching TeslaLogger charging records: {e}")
-            return None
-
-    def _fetch_teslamate_charging(self):
-        """
-        Fetch charging records from TeslaMate database
-        """
-        try:
-            # Use text() for raw SQL queries
-            query = text("SELECT * FROM charging_processes LIMIT 1000")  # Adjust limit as needed
-            result = self.teslamate_conn.execute(query)
-            
-            # Convert to list of dictionaries
-            charges = []
-            for row in result:
-                try:
-                    charge = {
-                        'date': row.start_date,
-                        'end_date': row.end_date,
-                        'car_id': row.car_id,
-                        'charge_energy_added': row.charge_energy_added,
-                        'battery_level_start': row.start_battery_level,
-                        'battery_level_end': row.end_battery_level,
-                        'charger_power': row.charge_power,
-                        # Add other relevant fields
-                    }
-                    charges.append(charge)
-                except Exception as field_error:
-                    self.logger.warning(f"Could not process TeslaMate charging row: {field_error}")
-            
-            self.logger.info(f"Fetched {len(charges)} charging records from TeslaMate")
-            return charges
-        
-        except Exception as e:
-            self.logger.error(f"Error fetching TeslaMate charging records: {e}")
-            return None
+        self.logger.info(f"Dry run: {len(potential_merges)} charging sessions would be written")
