@@ -98,3 +98,33 @@ class TestEdgeCases:
         )
         assert len(matches) == 1
         assert s.stats['skipped'] == 1
+
+
+class TestWetRunWelding:
+    def test_weld_positions_executed(self, mocker):
+        s = make_sync()
+        s.dry_run = False
+        mock_engine = mocker.MagicMock()
+        mock_conn = mocker.MagicMock()
+        mock_engine.connect.return_value.__enter__.return_value = mock_conn
+        mock_result = mocker.MagicMock()
+        mock_result.rowcount = 42
+        mock_conn.execute.return_value = mock_result
+        s.tm_engine = mock_engine
+
+        # Match should execute welding because dry_run = False and id is present
+        tm_record = tm(T0)
+        tm_record['id'] = 999
+        
+        matches = s._match(
+            iter([tl(T0)]),
+            iter([tm_record])
+        )
+        assert len(matches) == 1
+        assert mock_conn.execute.call_count == 1
+        
+        called_args = mock_conn.execute.call_args[0]
+        assert "UPDATE positions" in str(called_args[0])
+        assert called_args[1]['drive_id'] == 999
+        assert called_args[1]['car_id'] == 1
+

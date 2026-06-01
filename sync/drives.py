@@ -58,10 +58,13 @@ class DriveSync:
                 if (tl_dist is not None and tm_dist is not None and
                         abs(tl_dist - tm_dist) >= self.DISTANCE_TOLERANCE_KM):
                     continue
-                matches.append(self._merge(tl, tm))
+                merged = self._merge(tl, tm)
+                matches.append(merged)
                 tm_window.remove(tm)
                 self.stats['added'] += 1
                 matched = True
+                if not self.dry_run and merged.get('id') is not None:
+                    self._weld_positions(merged)
                 break
 
             if not matched:
@@ -72,6 +75,7 @@ class DriveSync:
 
     def _merge(self, tl, tm):
         return {
+            'id': tm.get('id'),
             'start_date': min(tl['StartDate'], tm['start_date']),
             'end_date': max(tl.get('EndDate') or tm['end_date'], tm['end_date']),
             'car_id': tl['CarID'],
@@ -98,18 +102,20 @@ class DriveSync:
 
     def _stream_teslamate(self):
         query = text("""
-            SELECT start_date, end_date, car_id, distance, speed_max
+            SELECT id, start_date, end_date, car_id, distance, speed_max
             FROM drives ORDER BY start_date
         """)
         with self.tm_engine.connect().execution_options(stream_results=True) as conn:
             for row in conn.execute(query):
                 yield {
+                    'id': row.id,
                     'start_date': row.start_date,
                     'end_date': row.end_date,
                     'car_id': row.car_id,
                     'distance': row.distance,
                     'speed_max': row.speed_max,
                 }
+
 
     def _count_positions_in_range(self, car_id, start, end):
         if not self.tl_engine:
@@ -151,3 +157,32 @@ class DriveSync:
                 f"    UPDATE positions SET drive_id = {simulated_drive_id} "
                 f"WHERE car_id = {car_id} AND date >= '{start}' AND date <= '{end}' AND drive_id IS NULL;"
             )
+
+    def _weld_positions(self, merged):
+        query = text("""
+            UPDATE positions 
+            SET drive_id = :drive_id 
+            WHERE car_id = :car_id 
+              AND date >= :start_date 
+              AND date <= :end_date 
+              AND drive_id IS NULL
+        """)
+        try:
+            with self.tm_engine.connect() as conn:
+                result = conn.execute(query, {
+                    'drive_id': merged['id'],
+                    'car_id': merged['car_id'],
+                    'start_date': merged['start_date'],
+                    'end_date': merged['end_date']
+                })
+                conn.commit()
+                rows_updated = result.rowcount
+            if rows_updated > 0:
+                self.logger.info(
+                    f"  Successfully welded {rows_updated} positions to Drive ID {merged['id']} "
+                    f"({merged['start_date']} – {merged['end_date']})"
+                )
+        except Exception as e:
+            self.logger.error(f"Failed to weld positions to drive {merged.get('id')}: {e}")
+            raise e
+
