@@ -13,7 +13,9 @@ def establish_teslalogger_connection(config):
             port=int(c['port']),
             database=c['database'],
         )
-        engine = create_engine(url, pool_pre_ping=True)
+        engine = create_engine(url, pool_pre_ping=True, connect_args={
+            'init_command': 'SET SESSION net_write_timeout=3600, net_read_timeout=3600',
+        })
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         logging.info("TeslaLogger database connection successful")

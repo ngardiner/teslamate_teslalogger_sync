@@ -27,6 +27,8 @@ class StateSync:
         tm_iter = iter(tm_stream)
         matches = []
         tl_count = 0
+        batch = []
+
 
         for tl in tl_stream:
             tl_count += 1
@@ -52,14 +54,27 @@ class StateSync:
                         abs(tl_ts - tm['start_date']) <= self.WINDOW and
                         tl.get('state') is not None and
                         tl.get('state') == tm.get('state')):
-                    matches.append(self._merge(tl, tm))
+                    merged = self._merge(tl, tm)
+                    matches.append(merged)
                     tm_window.remove(tm)
                     self.stats['added'] += 1
                     matched = True
+                    if not self.dry_run:
+                        batch.append({
+                            'state': merged['state'],
+                            'start_date': merged['start_date'],
+                            'end_date': merged['end_date'],
+                            'car_id': merged['car_id'],
+                        })
+                        if len(batch) >= 500:
+                            self._bulk_insert_states(batch)
                     break
 
             if not matched:
                 self.stats['skipped'] += 1
+
+        if not self.dry_run and batch:
+            self._bulk_insert_states(batch)
 
         self.logger.info(f"States: {tl_count} TeslaLogger, {len(matches)} matched")
         return matches
@@ -102,3 +117,19 @@ class StateSync:
 
     def log_potential_merges(self, potential_merges):
         self.logger.info(f"Dry run: {len(potential_merges)} states would be written")
+
+    def _bulk_insert_states(self, batch):
+        query = text("""
+            INSERT INTO states (state, start_date, end_date, car_id)
+            VALUES (:state, :start_date, :end_date, :car_id)
+        """)
+        try:
+            with self.tm_engine.connect() as conn:
+                conn.execute(query, batch)
+                conn.commit()
+            self.logger.info(f"  Successfully inserted batch of {len(batch)} state records into TeslaMate")
+        except Exception as e:
+            self.logger.error(f"Failed to bulk insert states: {e}")
+            raise e
+        finally:
+            batch.clear()

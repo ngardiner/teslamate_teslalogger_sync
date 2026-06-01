@@ -1,6 +1,6 @@
 image:
   repository: harbor.nate.id.au/library/tesla-sync
-  tag: "1.0"
+  tag: "1.16"
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
@@ -19,6 +19,7 @@ env:
 
   DRYRUN: "1"
   SYNC_POSITIONS: "0"
+  TESLALOGGER_TIMEZONE: "Australia/Melbourne"
   SYNC_DRIVES: "0"
   SYNC_CHARGING: "0"
   SYNC_STATES: "0"

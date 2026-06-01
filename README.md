@@ -86,9 +86,27 @@ docker run --env-file .env \
 ```
 
 ### Sync Modes
-DRYRUN=1: Logs potential merges without modifying data
-DRYRUN=0: Applies actual database merges
-Individual sync toggles allow granular control
+- **`DRYRUN=1` (Default):** Logs potential merges and delta stats without writing any data to either database. Highly recommended for safe initial runs.
+- **`DRYRUN=0`:** Applies actual database merges/writes to reconcile the systems.
+- **Granular Toggles:** `SYNC_POSITIONS`, `SYNC_DRIVES`, `SYNC_CHARGING`, and `SYNC_STATES` allow you to enable or disable sync routines individually.
+
+## How It Works: Sync Mechanics & Matching Rules
+
+This tool utilizes an optimized **Sliding-Window Sorted Merge-Join** algorithm to stream and align records chronologically from both databases. Because of this streaming layout, the tool maintains a tiny memory footprint (typically under 50 MB) and will not choke on large tables.
+
+Here is exactly how the script compares and merges each data type:
+
+| Data Type / Sync Module | TeslaLogger Table | TeslaMate Table | Time Window Tolerance | Matching Criteria | Merge / Resolution Rule |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Positions** (`SYNC_POSITIONS`) | `pos` | `positions` | `30 seconds` | Car ID matches **AND** GPS distance is $\le$ `10 meters` (calculated via Haversine formula). | Exact identical matches (same time, car, coordinates) are skipped. Delta rows are identified for addition. |
+| **Drives** (`SYNC_DRIVES`) | `drivestate` | `drives` | `5 minutes` | Car ID matches **AND** total driving distance difference is $\le$ `1.0 km`. | Merges the two rows: takes `min` start date, `max` end date, and the `maximum` of both distance and max speed. |
+| **Charging** (`SYNC_CHARGING`) | `charging` | `charging_processes` | `5 minutes` | Car ID matches **AND** start timestamps are within window. | Merges the two rows: takes `min` start date, `max` charge energy, and overlays TeslaLogger power/levels on top of TeslaMate cost and battery state. |
+| **States** (`SYNC_STATES`) | `state` | `states` | `5 minutes` | Car ID matches **AND** status values match (e.g. `online`, `asleep`). | Merges the two rows: takes `min` start date, `max` end date, and the unified state string. |
+
+### Timezone Safety
+* **TeslaLogger** stores naive local timestamps in the database.
+* **TeslaMate** stores standard UTC timestamps.
+* The script automatically converts TeslaLogger naive times to UTC using the configurable `TESLALOGGER_TIMEZONE` (defaults to `Australia/Melbourne`) before running the matching logic, ensuring perfect alignment.
 
 ### Logging
 Logs are output to:

@@ -110,5 +110,52 @@ class ChargingSync:
                     'cost': row.cost,
                 }
 
+    def _get_charging_points(self, car_id, start, end):
+        if not self.tl_engine:
+            return []
+        query = text("""
+            SELECT Datum, battery_level, charge_energy_added, charger_power,
+                   charger_voltage, charger_phases, charger_actual_current,
+                   charger_pilot_current, outside_temp, ideal_battery_range_km, battery_heater
+            FROM charging
+            WHERE CarID = :car_id AND Datum >= :start AND Datum <= :end
+            ORDER BY Datum
+        """)
+        try:
+            with self.tl_engine.connect() as conn:
+                result = conn.execute(query, {'car_id': car_id, 'start': start, 'end': end})
+                return [dict(row._mapping) for row in result]
+        except Exception as e:
+            self.logger.warning(f"Failed to fetch charging points: {e}")
+            return []
+
     def log_potential_merges(self, potential_merges):
         self.logger.info(f"Dry run: {len(potential_merges)} charging sessions would be written")
+        for i, session in enumerate(potential_merges, 1):
+            car_id = session['car_id']
+            start = session['start_date']
+            end = session['end_date']
+            energy = session['charge_energy_added']
+            
+            # Fetch the telemetry points from TeslaLogger
+            points = self._get_charging_points(car_id, start, end)
+            
+            # Simulate a charging process ID
+            simulated_process_id = 3000 + i
+            
+            self.logger.info(
+                f"[Dry Run] Charge Session #{i}: Would insert charging session for CarID={car_id} "
+                f"({start} to {end}, energy_added={energy:.1f} kWh, process_id={simulated_process_id})"
+            )
+            self.logger.info(
+                f"  - Inner Telemetry: Would insert {len(points)} high-resolution telemetry points into 'charges' table. Proposed inserts:"
+            )
+            # Log up to 3 points in detail
+            for j, p in enumerate(points[:3], 1):
+                self.logger.info(
+                    f"    * Point {j}: date={p['Datum']} UTC, battery_level={p['battery_level']}%, "
+                    f"power={p['charger_power']}kW, voltage={p['charger_voltage']}V, "
+                    f"current={p['charger_actual_current']}A (phases={p['charger_phases']})"
+                )
+            if len(points) > 3:
+                self.logger.info(f"    * ... and {len(points) - 3} more telemetry points.")

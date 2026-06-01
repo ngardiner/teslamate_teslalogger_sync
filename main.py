@@ -21,7 +21,7 @@ def main():
     logger.info(
         f"Starting sync — positions={sc['sync_positions']} drives={sc['sync_drives']} "
         f"charging={sc['sync_charging']} states={sc['sync_states']} "
-        f"dry_run={sc['dry_run']} position_limit={sc['position_limit']}"
+        f"dry_run={sc['dry_run']}"
     )
 
     tl_engine = establish_teslalogger_connection(config)
@@ -39,9 +39,9 @@ def main():
         if sc['sync_positions']:
             engines.append(PositionSync(
                 tl_engine, tm_engine, sc['dry_run'], stats['positions'],
-                sc['position_limit'],
                 time_window_seconds=sc['position_time_window'],
                 distance_threshold_meters=sc['position_distance_threshold'],
+                tl_timezone=sc['tl_timezone'],
             ))
         if sc['sync_drives']:
             engines.append(DriveSync(tl_engine, tm_engine, sc['dry_run'], stats['drives']))

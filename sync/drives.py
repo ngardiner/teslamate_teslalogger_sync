@@ -111,5 +111,43 @@ class DriveSync:
                     'speed_max': row.speed_max,
                 }
 
+    def _count_positions_in_range(self, car_id, start, end):
+        if not self.tl_engine:
+            return 0
+        query = text("""
+            SELECT COUNT(*) AS cnt 
+            FROM pos 
+            WHERE CarID = :car_id AND Datum >= :start AND Datum <= :end
+        """)
+        try:
+            with self.tl_engine.connect() as conn:
+                row = conn.execute(query, {'car_id': car_id, 'start': start, 'end': end}).fetchone()
+                return row.cnt if row else 0
+        except Exception as e:
+            self.logger.warning(f"Failed to count positions in range: {e}")
+            return 0
+
     def log_potential_merges(self, potential_merges):
         self.logger.info(f"Dry run: {len(potential_merges)} drives would be written")
+        for i, drive in enumerate(potential_merges, 1):
+            car_id = drive['car_id']
+            start = drive['start_date']
+            end = drive['end_date']
+            distance = drive['distance']
+            speed_max = drive['speed_max']
+            
+            # Count how many raw positions fall in this timeframe
+            pos_count = self._count_positions_in_range(car_id, start, end)
+            
+            # Simulate a primary key ID for dry run visual plumbing
+            simulated_drive_id = 2000 + i
+            
+            self.logger.info(
+                f"[Dry Run] Drive #{i}: Would insert drive session for CarID={car_id} "
+                f"({start} to {end}, distance={distance:.1f}km, max_speed={speed_max}km/h)"
+            )
+            self.logger.info(
+                f"  - Relational Weld: Would weld {pos_count} position records to Drive ID {simulated_drive_id} using:\n"
+                f"    UPDATE positions SET drive_id = {simulated_drive_id} "
+                f"WHERE car_id = {car_id} AND date >= '{start}' AND date <= '{end}' AND drive_id IS NULL;"
+            )

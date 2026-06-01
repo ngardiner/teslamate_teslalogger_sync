@@ -58,8 +58,7 @@ class Config:
             'sync_charging': os.getenv('SYNC_CHARGING', '0') == '1',
             'sync_states': os.getenv('SYNC_STATES', '0') == '1',
             
-            # Limits
-            'position_limit': int(os.getenv('POSITION_LIMIT', 0)),
+            'tl_timezone': os.getenv('TESLALOGGER_TIMEZONE', 'Australia/Melbourne'),
 
             # Test and validation flags
             'test_position': os.getenv('TEST_POSITION', '0') == '1',

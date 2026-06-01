@@ -1,3 +1,4 @@
+import logging
 import pytest
 from datetime import datetime, timedelta
 from sync.positions import PositionSync
@@ -11,6 +12,7 @@ def make_sync(**kwargs):
     s.stats = {'identical': 0, 'invalid': 0, 'added': 0}
     s.window = timedelta(seconds=kwargs.get('window_seconds', 30))
     s.distance_threshold = kwargs.get('distance_threshold', 10)
+    s.logger = logging.getLogger('test.positions')
     return s
 
 
