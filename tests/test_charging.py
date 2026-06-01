@@ -77,3 +77,39 @@ class TestEdgeCases:
         s = make_sync()
         assert s._match(iter([tl(T0)]), iter([])) == []
         assert s.stats['skipped'] == 1
+
+
+class TestWetRunTelemetry:
+    def test_bulk_insert_charges_executed(self, mocker):
+        s = make_sync()
+        s.dry_run = False
+        mock_engine = mocker.MagicMock()
+        mock_conn = mocker.MagicMock()
+        mock_engine.connect.return_value.__enter__.return_value = mock_conn
+        
+        # Capture the batch in-flight before finally: batch.clear() empties it
+        captured_batch = []
+        def mock_execute(query, batch):
+            captured_batch.extend(list(batch))
+            return mocker.MagicMock()
+        mock_conn.execute.side_effect = mock_execute
+        
+        s.tm_engine = mock_engine
+
+        # Mock tm record with id to open telemetry collection
+        tm_record = tm(T0)
+        tm_record['id'] = 777
+        
+        matches = s._match(
+            iter([tl(T0)]),
+            iter([tm_record])
+        )
+        assert len(matches) == 1
+        assert mock_conn.execute.call_count == 1
+        
+        called_args = mock_conn.execute.call_args[0]
+        assert "INSERT INTO charges" in str(called_args[0])
+        assert captured_batch[0]['charging_process_id'] == 777
+        assert captured_batch[0]['battery_level'] == 60
+
+

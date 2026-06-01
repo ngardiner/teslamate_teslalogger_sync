@@ -27,6 +27,8 @@ class ChargingSync:
         tm_iter = iter(tm_stream)
         matches = []
         tl_count = 0
+        active_sessions = []
+        charges_batch = []
 
         for tl in tl_stream:
             tl_count += 1
@@ -50,20 +52,58 @@ class ChargingSync:
             for tm in list(tm_window):
                 if (tl['CarID'] == tm['car_id'] and
                         abs(tl_ts - tm['start_date']) <= self.WINDOW):
-                    matches.append(self._merge(tl, tm))
+                    merged = self._merge(tl, tm)
+                    matches.append(merged)
                     tm_window.remove(tm)
                     self.stats['processed'] += 1
                     matched = True
+
+                    if merged.get('id') is not None:
+                        active_sessions.append({
+                            'id': merged['id'],
+                            'car_id': merged['car_id'],
+                            'start_date': merged['start_date'],
+                            'end_date': merged['end_date'],
+                        })
                     break
 
             if not matched:
                 self.stats['skipped'] += 1
+
+            # Telemetry collection logic - completely query-bomb proof!
+            # Discard active sessions that have ended
+            active_sessions = [s for s in active_sessions if s['end_date'] >= tl_ts]
+
+            # Associate the current telemetry point with any active matched session
+            for s in active_sessions:
+                if tl['CarID'] == s['car_id'] and tl_ts >= s['start_date'] and tl_ts <= s['end_date']:
+                    if not self.dry_run:
+                        charges_batch.append({
+                            'date': tl_ts,
+                            'battery_level': tl.get('battery_level'),
+                            'charge_energy_added': tl.get('charge_energy_added'),
+                            'charger_actual_current': tl.get('charger_actual_current'),
+                            'charger_phases': tl.get('charger_phases'),
+                            'charger_pilot_current': tl.get('charger_pilot_current'),
+                            'charger_power': tl.get('charger_power'),
+                            'charger_voltage': tl.get('charger_voltage'),
+                            'outside_temp': tl.get('outside_temp'),
+                            'ideal_battery_range_km': tl.get('ideal_battery_range_km'),
+                            'battery_heater': bool(tl.get('battery_heater')) if tl.get('battery_heater') is not None else None,
+                            'charging_process_id': s['id'],
+                        })
+                        if len(charges_batch) >= 1000:
+                            self._bulk_insert_charges(charges_batch)
+
+        if not self.dry_run and charges_batch:
+            self._bulk_insert_charges(charges_batch)
 
         self.logger.info(f"Charging: {tl_count} TeslaLogger, {len(matches)} matched")
         return matches
 
     def _merge(self, tl, tm):
         return {
+            'id': tm.get('id'),
             'start_date': min(tl['Datum'], tm['start_date']),
             'end_date': tm['end_date'],
             'car_id': tl['CarID'],
@@ -77,8 +117,9 @@ class ChargingSync:
 
     def _stream_teslalogger(self):
         query = text("""
-            SELECT Datum, CarID, charge_energy_added, battery_level,
-                   charger_power, ideal_battery_range_km
+            SELECT Datum, CarID, battery_level, charge_energy_added, charger_power,
+                   charger_voltage, charger_phases, charger_actual_current,
+                   charger_pilot_current, outside_temp, ideal_battery_range_km, battery_heater
             FROM charging ORDER BY Datum
         """)
         with self.tl_engine.connect().execution_options(stream_results=True) as conn:
@@ -86,21 +127,28 @@ class ChargingSync:
                 yield {
                     'Datum': row.Datum,
                     'CarID': row.CarID,
-                    'charge_energy_added': row.charge_energy_added,
                     'battery_level': row.battery_level,
+                    'charge_energy_added': row.charge_energy_added,
                     'charger_power': row.charger_power,
+                    'charger_voltage': row.charger_voltage,
+                    'charger_phases': row.charger_phases,
+                    'charger_actual_current': row.charger_actual_current,
+                    'charger_pilot_current': row.charger_pilot_current,
+                    'outside_temp': row.outside_temp,
                     'ideal_battery_range_km': row.ideal_battery_range_km,
+                    'battery_heater': row.battery_heater,
                 }
 
     def _stream_teslamate(self):
         query = text("""
-            SELECT start_date, end_date, car_id, charge_energy_added,
+            SELECT id, start_date, end_date, car_id, charge_energy_added,
                    start_battery_level, end_battery_level, cost
             FROM charging_processes ORDER BY start_date
         """)
         with self.tm_engine.connect().execution_options(stream_results=True) as conn:
             for row in conn.execute(query):
                 yield {
+                    'id': row.id,
                     'start_date': row.start_date,
                     'end_date': row.end_date,
                     'car_id': row.car_id,
@@ -109,6 +157,7 @@ class ChargingSync:
                     'battery_level_end': row.end_battery_level,
                     'cost': row.cost,
                 }
+
 
     def _get_charging_points(self, car_id, start, end):
         if not self.tl_engine:
@@ -159,3 +208,27 @@ class ChargingSync:
                 )
             if len(points) > 3:
                 self.logger.info(f"    * ... and {len(points) - 3} more telemetry points.")
+
+    def _bulk_insert_charges(self, batch):
+        query = text("""
+            INSERT INTO charges (
+                date, battery_level, charge_energy_added, charger_actual_current,
+                charger_phases, charger_pilot_current, charger_power, charger_voltage,
+                outside_temp, ideal_battery_range_km, battery_heater, charging_process_id
+            ) VALUES (
+                :date, :battery_level, :charge_energy_added, :charger_actual_current,
+                :charger_phases, :charger_pilot_current, :charger_power, :charger_voltage,
+                :outside_temp, :ideal_battery_range_km, :battery_heater, :charging_process_id
+            )
+        """)
+        try:
+            with self.tm_engine.connect() as conn:
+                conn.execute(query, batch)
+                conn.commit()
+            self.logger.info(f"  Successfully inserted batch of {len(batch)} charge telemetry points into TeslaMate")
+        except Exception as e:
+            self.logger.error(f"Failed to bulk insert charges: {e}")
+            raise e
+        finally:
+            batch.clear()
+
