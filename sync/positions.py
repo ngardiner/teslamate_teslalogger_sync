@@ -205,22 +205,23 @@ class PositionSync:
             WHERE CarID = :car_id AND Datum >= :start AND Datum < :end
             ORDER BY Datum
         """)
-        with self.tl_engine.connect().execution_options(stream_results=True) as conn:
-            for row in conn.execute(query, {'car_id': car_id, 'start': chunk_start, 'end': chunk_end}):
-                try:
-                    yield {
-                        'Datum': self._to_utc(row.Datum),
-                        'CarID': row.CarID,
-                        'lat': float(row.lat) if row.lat is not None else None,
-                        'lng': float(row.lng) if row.lng is not None else None,
-                        'battery_level': row.battery_level,
-                        'ideal_battery_range_km': row.ideal_battery_range_km,
-                        'odometer': row.odometer,
-                        'speed': row.speed,
-                        'power': row.power,
-                    }
-                except Exception as e:
-                    self.logger.warning(f"Skipping TeslaLogger row: {e}")
+        with self.tl_engine.connect() as conn:
+            rows = conn.execute(query, {'car_id': car_id, 'start': chunk_start, 'end': chunk_end}).fetchall()
+        for row in rows:
+            try:
+                yield {
+                    'Datum': self._to_utc(row.Datum),
+                    'CarID': row.CarID,
+                    'lat': float(row.lat) if row.lat is not None else None,
+                    'lng': float(row.lng) if row.lng is not None else None,
+                    'battery_level': row.battery_level,
+                    'ideal_battery_range_km': row.ideal_battery_range_km,
+                    'odometer': row.odometer,
+                    'speed': row.speed,
+                    'power': row.power,
+                }
+            except Exception as e:
+                self.logger.warning(f"Skipping TeslaLogger row: {e}")
 
     def _stream_teslamate(self, car_id, chunk_start, chunk_end):
         # TM stores UTC; chunk boundaries are TL-local — convert before querying
@@ -233,22 +234,24 @@ class PositionSync:
             WHERE car_id = :car_id AND date >= :start AND date < :end
             ORDER BY date
         """)
-        with self.tm_engine.connect().execution_options(stream_results=True) as conn:
-            for row in conn.execute(query, {'car_id': car_id, 'start': tm_start, 'end': tm_end}):
-                try:
-                    yield {
-                        'date': row.date,
-                        'car_id': row.car_id,
-                        'latitude': float(row.latitude) if row.latitude is not None else None,
-                        'longitude': float(row.longitude) if row.longitude is not None else None,
-                        'battery_level': row.battery_level,
-                        'odometer': row.odometer,
-                        'ideal_battery_range_km': row.ideal_battery_range_km,
-                        'speed': row.speed,
-                        'power': row.power,
-                    }
-                except Exception as e:
-                    self.logger.warning(f"Skipping TeslaMate row: {e}")
+        with self.tm_engine.connect() as conn:
+            rows = conn.execute(query, {'car_id': car_id, 'start': tm_start, 'end': tm_end}).fetchall()
+        for row in rows:
+            try:
+                yield {
+                    'date': row.date,
+                    'car_id': row.car_id,
+                    'latitude': float(row.latitude) if row.latitude is not None else None,
+                    'longitude': float(row.longitude) if row.longitude is not None else None,
+                    'battery_level': row.battery_level,
+                    'odometer': row.odometer,
+                    'ideal_battery_range_km': row.ideal_battery_range_km,
+                    'speed': row.speed,
+                    'power': row.power,
+                }
+            except Exception as e:
+                self.logger.warning(f"Skipping TeslaMate row: {e}")
+
 
     def log_potential_merges(self, potential_merges):
         self.logger.info(
